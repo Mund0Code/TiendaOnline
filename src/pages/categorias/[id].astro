@@ -1,0 +1,59 @@
+---
+import BaseLayout from "../../layouts/Layout.astro";
+import ProductCard from "../../components/ProductCard.jsx";
+import { supabase } from "../../lib/supabaseClient";
+
+const categoryId = Astro.params.id;
+
+// 1) Traer datos de la categoría
+const { data: category, error: catErr } = await supabase
+  .from("categories")
+  .select("name")
+  .eq("id", categoryId)
+  .single();
+
+// 2) Traer productos de esa categoría
+const { data: products = [], error: prodErr } = await supabase
+  .from("products")
+  .select("id, name, price, image_url")
+  .eq("category_id", categoryId)
+  .order("created_at", { ascending: false });
+
+if (catErr) console.error("Error cargando categoría:", catErr);
+if (prodErr) console.error("Error cargando productos:", prodErr);
+---
+
+<BaseLayout title={category?.name ?? "Categoría"}>
+  <section class="max-w-6xl mx-auto py-12 px-4">
+    <header class="mb-8">
+      <h1 class="text-3xl font-bold">
+        {category ? `Libros en "${category.name}"` : "Categoría no encontrada"}
+      </h1>
+    </header>
+
+    {
+      category && (
+        <>
+          {products.length === 0 ? (
+            <p class="text-gray-600">No hay libros en esta categoría.</p>
+          ) : (
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+              {products.map((p) => (
+                <ProductCard
+                  client:load
+                  key={p.id}
+                  product={{
+                    id: p.id,
+                    name: p.name,
+                    price: p.price,
+                    image_url: p.image_url,
+                  }}
+                />
+              ))}
+            </div>
+          )}
+        </>
+      )
+    }
+  </section>
+</BaseLayout>

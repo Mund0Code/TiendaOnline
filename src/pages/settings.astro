@@ -1,0 +1,10 @@
+---
+import BaseLayout from "../layouts/Layout.astro";
+import SettingsForm from "../components/SettingsForm.jsx";
+import { useEffect } from "react";
+import { supabase } from "../lib/supabaseClient";
+---
+
+<BaseLayout title="Configuración">
+  <SettingsForm client:load />
+</BaseLayout>

@@ -1,0 +1,9 @@
+---
+import BaseLayout from "../layouts/Layout.astro";
+import Cart from "../components/Cart.jsx";
+---
+
+<BaseLayout title="Carrito">
+  <!-- client:load garantiza que todo el JSX corre sólo en el navegador -->
+  <Cart client:load />
+</BaseLayout>

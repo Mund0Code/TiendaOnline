@@ -1,0 +1,116 @@
+---
+import BaseLayout from "../layouts/Layout.astro";
+import ProductCard from "../components/ProductCard.jsx";
+import { supabase } from "../lib/supabaseClient";
+
+const perPage = 20;
+const page = Math.max(
+  1,
+  parseInt(Astro.url.searchParams.get("page") || "1", 10)
+);
+const from = (page - 1) * perPage;
+const to = from + perPage - 1;
+
+// 1) Traemos los productos (incluyendo descripción) y el conteo total
+const {
+  data: products = [],
+  count,
+  error,
+} = await supabase
+  .from("products")
+  .select(
+    `
+    id,
+    name,
+    description,
+    price,
+    image_url,
+    category:categories(name)
+  `,
+    { count: "exact" }
+  )
+  .order("created_at", { ascending: false })
+  .range(from, to);
+
+const total = count ?? 0;
+const totalPages = Math.ceil(total / perPage);
+---
+
+<BaseLayout title="Nuestra Tienda">
+  <section class="max-w-7xl mx-auto py-12 px-4 sm:px-6 lg:px-8">
+    <header class="mb-8 text-center">
+      <h1 class="text-4xl font-extrabold text-gray-900">
+        Nuestra Colección de Libros
+      </h1>
+      <p class="mt-2 text-gray-600">Explora y elige tu próxima lectura</p>
+    </header>
+
+    {
+      error ? (
+        <div class="bg-red-50 border border-red-200 text-red-800 p-4 rounded-md mb-6">
+          <p class="font-medium">¡Uy! No pudimos cargar los productos.</p>
+          <p class="text-sm">Inténtalo de nuevo más tarde.</p>
+        </div>
+      ) : (
+        <>
+          <div class="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {products.map((p) => (
+              <ProductCard
+                client:load
+                key={p.id}
+                product={{
+                  id: p.id,
+                  name: p.name,
+                  description: p.description,
+                  price: p.price,
+                  image_url: p.image_url,
+                  category: p.category, // <-- pasamos el objeto category
+                }}
+              />
+            ))}
+          </div>
+
+          {totalPages > 1 && (
+            <nav class="mt-12 flex justify-center items-center space-x-4">
+              {page > 1 ? (
+                <a
+                  href={`/?page=${page - 1}`}
+                  class="px-4 py-2 bg-white border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 transition"
+                >
+                  ← Anterior
+                </a>
+              ) : (
+                <button
+                  class="px-4 py-2 bg-gray-100 border border-gray-200 rounded-md text-gray-400 cursor-not-allowed"
+                  disabled
+                >
+                  ← Anterior
+                </button>
+              )}
+
+              <span class="text-gray-700">
+                Página <strong>{page}</strong> de <strong>{totalPages}</strong>
+              </span>
+
+              {page < totalPages ? (
+                <a
+                  href={`/?page=${page + 1}`}
+                  class="px-4 py-2 bg-white border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 transition"
+                >
+                  Siguiente →
+                </a>
+              ) : (
+                <button
+                  class="px-4 py-2 bg-gray-100 border border-gray-200 rounded-md text-gray-400 cursor-not-allowed"
+                  disabled
+                >
+                  Siguiente →
+                </button>
+              )}
+            </nav>
+          )}
+        </>
+      )
+    }
+  </section>
+</BaseLayout>

@@ -1,0 +1,41 @@
+{
+  "name": "tiendaoonline",
+  "type": "module",
+  "version": "0.0.1",
+  "scripts": {
+    "dev": "astro dev --host",
+    "build": "astro build",
+    "preview": "astro preview",
+    "astro": "astro"
+  },
+  "dependencies": {
+    "@astrojs/node": "^9.2.2",
+    "@astrojs/react": "^4.3.0",
+    "@auth/core": "^0.37.4",
+    "@stripe/stripe-js": "^7.3.1",
+    "@supabase/supabase-js": "^2.50.0",
+    "@tailwindcss/vite": "^4.1.8",
+    "astro": "^5.9.1",
+    "auth-astro": "^4.2.0",
+    "bcryptjs": "^3.0.2",
+    "date-fns": "^4.1.0",
+    "jsonwebtoken": "^9.0.2",
+    "pdfkit": "^0.17.1",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "react-router-dom": "^7.6.2",
+    "recharts": "^2.15.3",
+    "resend": "^4.5.2",
+    "stripe": "^18.2.1",
+    "tailwindcss": "^4.1.8",
+    "zod": "^3.25.57",
+    "zustand": "^5.0.5"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/jsonwebtoken": "^9.0.9",
+    "@types/react": "^19.1.6",
+    "@types/react-dom": "^19.1.6",
+    "@types/stripe": "^8.0.416"
+  }
+}

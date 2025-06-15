@@ -1,0 +1,39 @@
+---
+// src/layouts/BaseLayout.astro
+const { title } = Astro.props;
+import CartProvider from "../components/CartProvider.jsx";
+import "../styles/global.css";
+import Header from "../components/Header.jsx";
+import Footer from "../components/Footer.jsx";
+---
+
+<!doctype html>
+<html lang="es" class="h-full">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{title ? `${title} | MyShop` : "MyShop"}</title>
+    <link
+      href="https://cdn.jsdelivr.net/npm/flowbite@3.1.2/dist/flowbite.min.css"
+      rel="stylesheet"
+    />
+  </head>
+  <body class="flex flex-col min-h-screen bg-gray-100 text-gray-900">
+    {/* Header permanece arriba */}
+    <Header client:load />
+
+    {/* Contenido crece para empujar footer */}
+    <main class="flex-1">
+      <CartProvider>
+        <slot />
+      </CartProvider>
+    </main>
+
+    {/* Footer siempre abajo */}
+    <Footer />
+
+    <script
+      src="https://cdn.jsdelivr.net/npm/flowbite@3.1.2/dist/flowbite.min.js"
+    ></script>
+  </body>
+</html>

@@ -1,0 +1,15 @@
+---
+import BaseLayout from "../layouts/Layout.astro";
+import LoginForm from "../components/LoginForm.jsx";
+---
+
+<BaseLayout title="Iniciar sesión">
+  <div class="max-w-md mx-auto mt-16 p-6 bg-white rounded-lg shadow">
+    <h2 class="text-2xl font-bold mb-4">Iniciar sesión</h2>
+    <LoginForm client:load />
+    <p class="mt-4 text-center">
+      ¿No tienes cuenta?
+      <a href="/register" class="text-green-600 hover:underline">Regístrate</a>
+    </p>
+  </div>
+</BaseLayout>

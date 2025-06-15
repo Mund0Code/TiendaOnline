@@ -1,0 +1,16 @@
+---
+import BaseLayout from "../layouts/Layout.astro";
+import { useEffect, useState } from "react";
+import { useCartStore } from "../lib/cartStore";
+import CheckoutForm from "../components/CheckoutForm.jsx";
+---
+
+<BaseLayout title="Checkout">
+  <div
+    id="checkout-root"
+    class="max-w-md mx-auto mt-16 p-6 bg-white rounded-lg shadow"
+  >
+    <h2 class="text-2xl font-bold mb-4">Confirmar pedido</h2>
+    <CheckoutForm client:load />
+  </div>
+</BaseLayout>
