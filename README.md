@@ -132,7 +132,7 @@ Un proyecto de comercio electrónico completo, construido con **Astro**, **React
 
 # 📁 Estructura de carpetas
 
-    ```text
+    ```
         /
     ├── public/                  # Archivos estáticos (logo, libros subidos)
     ├── src/
@@ -222,4 +222,4 @@ Un proyecto de comercio electrónico completo, construido con **Astro**, **React
 
 4. Abre un Pull Request describiendo tu aporte
 
-<p align="center"> <sub>Desarrollado con ❤️ por tu equipo</sub> </p> ```
+<p align="center"> <sub>Desarrollado con ❤️ por tu equipo</sub> </p>
