@@ -6,7 +6,7 @@ import { supabaseAdmin } from "../../lib/supabaseAdminClient";
 export const config = { api: { bodyParser: false } };
 
 const stripe = new Stripe(import.meta.env.STRIPE_SECRET_KEY, {
-  apiVersion: "2022-11-15",
+  apiVersion: "2025-05-28.basil",
 });
 const endpointSecret = import.meta.env.STRIPE_WEBHOOK_SECRET;
 
@@ -39,11 +39,11 @@ export const POST: APIRoute = async ({ request }) => {
       }
     );
     const itemNames = lineItemsRes.data.map((li) => {
-      // Primero intentamos extraer product.name
-      const prod = (li.price as any).product as Stripe.Product;
-      if (prod && prod.name) return prod.name;
-      // Luego fallback a price_data.product_data.name
-      return li.price_data?.product_data?.name || "Artículo desconocido";
+      if (li.price && typeof li.price === "object" && "product" in li.price) {
+        const product = li.price.product as Stripe.Product;
+        return product.name || "Producto sin nombre";
+      }
+      return "Producto desconocido";
     });
     const name = itemNames.join(", "); // todos los nombres
 

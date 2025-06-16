@@ -10,7 +10,7 @@ import { supabaseAdmin } from "../lib/supabaseAdminClient";
 import InvoiceButton from "../components/InvoiceButton.jsx";
 
 const stripe = new Stripe(import.meta.env.STRIPE_SECRET_KEY, {
-  apiVersion: "2022-11-15",
+  apiVersion: "2025-05-28.basil",
 });
 
 const sessionId = Astro.url.searchParams.get("session_id")!;
@@ -49,7 +49,7 @@ if (session?.line_items?.data) {
 
 <BaseLayout title="Gracias por tu compra">
   <div
-    class="max-w-md mx-auto p-6 bg-white rounded shadow text-center space-y-4"
+    class="max-w-md mx-auto mt-20 p-6 bg-white rounded shadow text-center space-y-4"
   >
     {
       session ? (
