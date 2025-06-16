@@ -132,7 +132,6 @@ Un proyecto de comercio electrónico completo, construido con **Astro**, **React
 
 # 📁 Estructura de carpetas
 
-    ```
         /
     ├── public/                  # Archivos estáticos (logo, libros subidos)
     ├── src/
@@ -157,7 +156,6 @@ Un proyecto de comercio electrónico completo, construido con **Astro**, **React
     ├── .env
     ├── package.json
     └── README.md
-    ```
 
 # 🔑 Rutas y API
 
