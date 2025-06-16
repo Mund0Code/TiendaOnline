@@ -37,7 +37,7 @@ export default function UserOrders({ userId, onDownloaded }) {
       {orders.map((o) => (
         <li
           key={o.checkout_session_id}
-          className="p-4 bg-gray-50 rounded flex justify-between"
+          className="p-4 bg-gray-300 rounded flex justify-between"
         >
           <div>
             <p className="font-medium">{o.name}</p>
