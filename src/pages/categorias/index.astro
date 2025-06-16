@@ -17,8 +17,8 @@ if (error) console.error("Error cargando categorías:", error);
         <p class="text-red-600">No pudimos cargar las categorías.</p>
       ) : (
         <ul class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-          {categories.map((cat) => (
-            <li key={cat.id}>
+          {categories?.map((cat) => (
+            <li>
               <a
                 href={`/categorias/${cat.id}`}
                 class="block p-4 bg-white rounded shadow hover:bg-gray-50"

@@ -58,7 +58,12 @@ if (session?.line_items?.data) {
           <p>
             Has comprado: <strong>{productName}</strong>
             <br />
-            <span>Importe: €{(session.amount_total / 100).toFixed(2)}</span>
+            <span>
+              Importe: €
+              {session.amount_total != null
+                ? (session.amount_total / 100).toFixed(2)
+                : "N/A"}
+            </span>
           </p>
 
           {order ? (
