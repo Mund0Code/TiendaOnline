@@ -9,15 +9,17 @@ import AdminProducts from "./AdminProducts.jsx";
 import AdminCategories from "./AdminCategories.jsx";
 import AdminUsers from "./AdminUsers.jsx";
 import AdminAnalytics from "./AdminAnalytics.jsx";
+import AdminSupport from "./AdminSupport.jsx";
 import Sidebar from "./Sidebar.jsx";
 
 const TABS = {
-  home: { label: "Resumen", component: <AdminHome /> },
-  orders: { label: "Pedidos", component: <AdminOrders /> },
-  products: { label: "Productos", component: <AdminProducts /> },
-  categories: { label: "Categorías", component: <AdminCategories /> },
-  users: { label: "Clientes", component: <AdminUsers /> },
-  analytics: { label: "Analíticas", component: <AdminAnalytics /> },
+  home: { label: "📋 Resumen", component: <AdminHome /> },
+  orders: { label: "📦 Pedidos", component: <AdminOrders /> },
+  products: { label: "🛒 Productos", component: <AdminProducts /> },
+  categories: { label: "🗂️ Categorías", component: <AdminCategories /> },
+  users: { label: "🧑‍🦰 Clientes", component: <AdminUsers /> },
+  analytics: { label: "📊 Analíticas", component: <AdminAnalytics /> },
+  support: { label: "🎧 Soporte", component: <AdminSupport /> },
 };
 
 export default function AdminDashboard() {
@@ -75,7 +77,7 @@ export default function AdminDashboard() {
       />
 
       {/* Contenido principal */}
-      <main className="sm:ml-64 p-6 bg-gray-50 min-h-screen">
+      <main className="sm:ml-64 p-6 mt-16 bg-gray-50 min-h-screen">
         {TABS[activeTab].component}
       </main>
     </>

@@ -13,7 +13,7 @@ export default function Cart() {
 
   if (items.length === 0) {
     return (
-      <div className="p-6 text-center">
+      <div className="p-6 text-center mt-16">
         <p className="text-lg">Tu carrito está vacío.</p>
         <a
           href="/"
@@ -26,7 +26,7 @@ export default function Cart() {
   }
 
   return (
-    <div className="max-w-3xl mx-auto p-6 space-y-6">
+    <div className="max-w-3xl mx-auto mt-16 p-6 space-y-6">
       <h1 className="text-2xl font-bold">Carrito de la compra</h1>
       <ul className="space-y-4">
         {items.map((item) => (

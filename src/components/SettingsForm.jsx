@@ -100,7 +100,7 @@ export default function SettingsForm() {
   };
 
   return (
-    <div className="max-w-md mx-auto space-y-8 p-6">
+    <div className="max-w-md mx-auto mt-16 space-y-8 p-6">
       {/* Nombre */}
       <form
         onSubmit={updateName}

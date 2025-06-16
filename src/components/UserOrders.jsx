@@ -1,26 +1,39 @@
 // src/components/UserOrders.jsx
 import React, { useState, useEffect } from "react";
 import { supabase } from "../lib/supabaseClient";
-import DownloadButton from "./DownloadButton.jsx";
+import BookDownloadButton from "./BookDownloadButton.jsx";
 
-export default function UserOrders({ userId }) {
+export default function UserOrders({ userId, onDownloaded }) {
   const [orders, setOrders] = useState([]);
 
   useEffect(() => {
     supabase
       .from("orders")
       .select(
-        "checkout_session_id, name, amount_total, status, created_at, product_id"
+        `
+      id,
+      checkout_session_id,
+      name,
+      amount_total,
+      status,
+      created_at,
+      product_id,
+      downloaded,
+      product:products(name)
+    `
       )
       .eq("customer_id", userId)
       .order("created_at", { ascending: false })
-      .then(({ data }) => setOrders(data || []));
+      .then(({ data }) => {
+        console.log("📦 fetched orders in UserOrders:", data);
+        setOrders(data || []);
+      });
   }, [userId]);
 
   if (!orders.length) return <p>No has realizado ningún pedido.</p>;
 
   return (
-    <ul className="space-y-4">
+    <ul className="space-y-4 mt-16">
       {orders.map((o) => (
         <li
           key={o.checkout_session_id}
@@ -34,7 +47,15 @@ export default function UserOrders({ userId }) {
             <p className="text-sm">{new Date(o.created_at).toLocaleString()}</p>
           </div>
           <div>
-            {o.product_id && <DownloadButton productId={o.product_id} />}
+            {o.product_id ? (
+              <BookDownloadButton
+                orderId={o.id}
+                productId={o.product_id}
+                onDownloaded={onDownloaded}
+              />
+            ) : (
+              <span className="text-gray-400">—</span>
+            )}
           </div>
         </li>
       ))}

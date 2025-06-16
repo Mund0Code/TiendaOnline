@@ -1,67 +1,43 @@
 // src/components/DownloadButton.jsx
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { supabase } from "../lib/supabaseClient";
 
-export default function DownloadButton({ productId }) {
-  const [url, setUrl] = useState(null);
-  const [error, setError] = useState(null);
-  const [filePath, setFilePath] = useState(null);
+export default function DownloadButton({ orderId, downloadUrl, onDownloaded }) {
+  const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    (async () => {
-      try {
-        // 1) Saca file_path
-        const { data: prod, error: prodErr } = await supabase
-          .from("products")
-          .select("file_path")
-          .eq("id", productId)
-          .single();
+  const handleClick = async () => {
+    setLoading(true);
+    // 1) Marcamos el pedido como descargado
+    const { error } = await supabase
+      .from("orders")
+      .update({ downloaded: true })
+      .eq("id", orderId);
 
-        console.log("⏺️ DownloadButton: producto:", prod, "error:", prodErr);
+    if (error) {
+      console.error("Error marcando como descargado:", error);
+      setLoading(false);
+      return;
+    }
 
-        if (prodErr) throw prodErr;
-        if (!prod?.file_path) throw new Error("file_path está vacío en la BD");
+    // 2) Informamos al padre (ProfileDashboard) que recalcule
+    onDownloaded?.();
 
-        setFilePath(prod.file_path);
+    // 3) Abrimos la URL en nueva pestaña
+    window.open(downloadUrl, "_blank");
+    setLoading(false);
+  };
 
-        // 2) Pide la URL firmada
-        const res = await fetch(
-          `/api/download?file_path=${encodeURIComponent(prod.file_path)}`
-        );
-        const json = await res.json();
-        if (!res.ok)
-          throw new Error(json.error || "Error al obtener URL de descarga");
-        setUrl(json.url);
-      } catch (err) {
-        console.error("DownloadButton error:", err);
-        setError(err.message);
-      }
-    })();
-  }, [productId]);
-
-  if (error) {
-    return (
-      <div className="text-red-600 text-sm">
-        Error: {error}
-        {filePath === null ? null : <div>file_path leído: "{filePath}"</div>}
-      </div>
-    );
-  }
-  if (!url) {
-    return (
-      <p className="text-gray-600">
-        Cargando enlace... (file_path: {filePath || "no leído aún"})
-      </p>
-    );
-  }
   return (
-    <a
-      href={url}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700"
+    <button
+      onClick={handleClick}
+      disabled={loading}
+      className={`text-sm font-medium ${
+        loading
+          ? "text-gray-400 cursor-not-allowed"
+          : "text-blue-600 hover:underline"
+      }`}
     >
-      Descargar tu libro
-    </a>
+      {loading ? "Preparando..." : "Descargar Factura"}
+    </button>
   );
 }
