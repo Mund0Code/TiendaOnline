@@ -41,7 +41,7 @@ export default function SupportForm() {
   }
 
   return (
-    <div className="mt-16">
+    <div className="mt-20">
       <form onSubmit={handleSubmit} className="max-w-md space-y-4">
         <h3 className="text-2xl font-semibold">Soporte</h3>
         {error && <p className="text-red-600">{error}</p>}

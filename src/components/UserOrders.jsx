@@ -33,7 +33,7 @@ export default function UserOrders({ userId, onDownloaded }) {
   if (!orders.length) return <p>No has realizado ningún pedido.</p>;
 
   return (
-    <ul className="space-y-4 mt-16">
+    <ul className="space-y-4 mt-24">
       {orders.map((o) => (
         <li
           key={o.checkout_session_id}

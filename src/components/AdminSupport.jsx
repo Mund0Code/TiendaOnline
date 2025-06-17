@@ -59,7 +59,7 @@ export default function AdminSupport() {
   if (!messages.length) return <p>No hay mensajes de soporte.</p>;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 mt-10">
       <h2 className="text-2xl font-semibold">Mensajes de Soporte</h2>
       <div className="overflow-x-auto">
         <table className="min-w-full bg-white rounded shadow">

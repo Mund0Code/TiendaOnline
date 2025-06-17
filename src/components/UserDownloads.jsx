@@ -39,7 +39,7 @@ export default function UserDownloads({ userId }) {
   }
 
   return (
-    <div className="space-y-4 mt-16">
+    <div className="space-y-4 mt-24">
       <h3 className="text-2xl font-semibold">Facturas</h3>
       <div className="relative overflow-x-auto shadow-md sm:rounded-lg">
         <table className="w-full text-sm text-left rtl:text-right text-gray-500 dark:text-gray-400">

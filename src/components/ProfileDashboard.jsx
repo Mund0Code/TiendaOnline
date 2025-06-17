@@ -159,9 +159,9 @@ export default function ProfileDashboard() {
       </aside>
 
       {/* Contenido principal */}
-      <main className="flex-1 p-6 overflow-auto mt-16 bg-gray-100 sm:ml-64">
+      <main className="flex-1 p-6 overflow-auto bg-gray-100 sm:ml-64">
         {tab === "summary" && (
-          <div className="space-y-6">
+          <div className="space-y-6 mt-24">
             {/* … Cards … */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <Card label="Pedidos totales" value={totalOrders} />

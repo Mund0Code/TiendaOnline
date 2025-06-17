@@ -73,7 +73,7 @@ export default function AdminAnalytics() {
   if (loading) return <p>Cargando analíticas…</p>;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 mt-10">
       <h3 className="text-lg font-semibold mb-4">Analíticas Reales</h3>
 
       {/* Ventas últimos 7 días */}

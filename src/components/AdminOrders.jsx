@@ -47,7 +47,7 @@ export default function AdminOrders() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 mt-10">
       <h2 className="text-2xl font-semibold">Pedidos recientes</h2>
       <div className="overflow-x-auto bg-white rounded shadow">
         <table className="min-w-full divide-y divide-gray-200">

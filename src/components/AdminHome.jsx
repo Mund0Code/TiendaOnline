@@ -68,7 +68,7 @@ export default function AdminHome() {
   }, []);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 mt-10">
       {/* Métricas */}
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
         <MetricCard label="Pedidos totales" value={stats.totalOrders} />
