@@ -26,7 +26,7 @@ export default function Cart() {
   }
 
   return (
-    <div className="max-w-3xl mx-auto mt-24 p-6 space-y-6">
+    <div className="max-w-3xl mx-auto mt-28 p-6 space-y-6">
       <h1 className="text-2xl font-bold">Carrito de la compra</h1>
       <ul className="space-y-4">
         {items.map((item) => (
