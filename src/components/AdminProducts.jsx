@@ -42,9 +42,9 @@ export default function AdminProducts() {
         name,
         price,
         category_id,
-        categories (
-          name
-        )
+        category:categories!fk_products_category(
+      name
+    )
       `
       )
       .order("created_at", { ascending: false });
@@ -269,7 +269,7 @@ export default function AdminProducts() {
               <p className="text-sm text-gray-600">
                 €{Number(p.price).toFixed(2)} —{" "}
                 <span className="italic text-gray-500">
-                  {p.categories?.name || "Sin categoría"}
+                  {p.category?.name ?? "Sin categoría"}
                 </span>
               </p>
             </div>

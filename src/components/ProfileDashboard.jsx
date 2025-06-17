@@ -3,14 +3,6 @@ import React, { useState, useEffect, useCallback } from "react";
 import { supabase } from "../lib/supabaseClient";
 import SettingsForm from "./SettingsForm.jsx";
 import UserOrders from "./UserOrders.jsx";
-import {
-  ResponsiveContainer,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip,
-} from "recharts";
 import InvoiceDownloadButton from "./InvoiceDownloadButton.jsx";
 import SupportForm from "./SupportForm.jsx";
 import UserDownloads from "./UserDownloads.jsx";
