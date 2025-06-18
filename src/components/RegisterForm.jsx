@@ -16,11 +16,14 @@ export default function RegisterForm() {
     setError("");
     setLoading(true);
 
-    // 1) Regístrate en Auth
+    // 1) Registro en Auth
     const { data: signUpData, error: signUpError } = await supabase.auth.signUp(
       {
         email: form.email,
         password: form.password,
+        options: {
+          data: { full_name: form.name }, // Guarda también el nombre en metadata
+        },
       }
     );
 
@@ -30,24 +33,19 @@ export default function RegisterForm() {
       return;
     }
 
-    // 2) Esperar a que la sesión esté activa
-    const {
-      data: { session },
-      error: sessionError,
-    } = await supabase.auth.getSession();
-
-    if (sessionError || !session) {
-      setError("No se pudo iniciar sesión tras el registro.");
+    // ⚠️ Si tienes activado "email confirmation", `signUpData.user` será null
+    const user = signUpData.user;
+    if (!user) {
+      setError("Revisa tu email para confirmar la cuenta.");
       setLoading(false);
       return;
     }
 
-    // 3) Insertar en profiles incluyendo email (no puede ser NULL)
+    // 2) Insertar en `profiles` con el ID correcto
     const { error: profileError } = await supabase.from("profiles").insert([
       {
-        id: signUpData.user.id,
+        id: user.id, // ← ¡muy importante! este debe ser UUID válido
         full_name: form.name,
-        email: signUpData.user.email, // ← aquí incluimos el email
       },
     ]);
 
@@ -57,7 +55,7 @@ export default function RegisterForm() {
       return;
     }
 
-    // 4) Redirigir al login
+    // 3) Redirige al login
     window.location.href = "/login";
   };
 
