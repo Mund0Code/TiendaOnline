@@ -41,20 +41,6 @@ export default function RegisterForm() {
       return;
     }
 
-    // 2) Insertar en `profiles` con el ID correcto
-    const { error: profileError } = await supabase.from("profiles").insert([
-      {
-        id: user.id, // ← ¡muy importante! este debe ser UUID válido
-        full_name: form.name,
-      },
-    ]);
-
-    if (profileError) {
-      setError("Error al guardar perfil: " + profileError.message);
-      setLoading(false);
-      return;
-    }
-
     // 3) Redirige al login
     window.location.href = "/login";
   };
