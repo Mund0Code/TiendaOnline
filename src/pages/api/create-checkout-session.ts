@@ -1,39 +1,89 @@
 // src/pages/api/create-checkout-session.ts
 import type { APIRoute } from "astro";
 import { Stripe } from "stripe";
+import { supabaseAdmin } from "../../lib/supabaseAdminClient";
+
+// Si usas uuid
+import { v4 as uuidv4 } from "uuid";
 
 const stripe = new Stripe(import.meta.env.STRIPE_SECRET_KEY, {
   apiVersion: "2025-05-28.basil",
 });
 
 export const POST: APIRoute = async ({ request }) => {
-  const { items, customerId } = (await request.json()) as {
-    items: { id: string; name: string; price: number; quantity: number }[];
-    customerId: string;
-  };
+  try {
+    const { items, customerId } = (await request.json()) as {
+      items: { id: string; name: string; price: number; quantity: number }[];
+      customerId: string;
+    };
 
-  const line_items = items.map((item) => ({
-    price_data: {
-      currency: "eur",
-      product_data: { name: item.name },
-      unit_amount: Math.round(item.price * 100),
-    },
-    quantity: item.quantity,
-  }));
+    if (!items || !items.length || !customerId) {
+      return new Response(
+        JSON.stringify({ error: "Datos incompletos del pedido" }),
+        { status: 400 }
+      );
+    }
 
-  const session = await stripe.checkout.sessions.create({
-    payment_method_types: ["card"],
-    line_items,
-    mode: "payment",
-    client_reference_id: customerId, // ← aquí
-    metadata: { product_id: items[0].id }, // asumiendo un solo libro
+    // 1. Prepara los items para Stripe
+    const line_items = items.map((item) => ({
+      price_data: {
+        currency: "eur",
+        product_data: { name: item.name },
+        unit_amount: Math.round(item.price * 100),
+      },
+      quantity: item.quantity,
+    }));
 
-    success_url: `${import.meta.env.PUBLIC_SITE_URL}/success?session_id={CHECKOUT_SESSION_ID}`,
-    cancel_url: `${import.meta.env.PUBLIC_SITE_URL}/cart`,
-  });
+    // 2. Crea sesión de pago en Stripe
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ["card"],
+      line_items,
+      mode: "payment",
+      client_reference_id: customerId,
+      metadata: { product_id: items[0].id }, // solo si es uno
+      success_url: `${import.meta.env.PUBLIC_SITE_URL}/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${import.meta.env.PUBLIC_SITE_URL}/cart`,
+    });
 
-  return new Response(JSON.stringify({ url: session.url }), {
-    status: 200,
-    headers: { "Content-Type": "application/json" },
-  });
+    // 3. Calcula total
+    const amount_total = items.reduce(
+      (sum, i) => sum + i.price * i.quantity,
+      0
+    );
+
+    // 4. Inserta pedido en Supabase
+    const { error: insertError } = await supabaseAdmin.from("orders").insert([
+      {
+        id: uuidv4(),
+        customer_id: customerId,
+        name: items.map((i) => i.name).join(", "),
+        customer_email: null, // opcional
+        amount_total,
+        status: "pending",
+        downloaded: false,
+        invoice_downloaded: false,
+        product_id: items[0].id, // solo si uno
+        checkout_session_id: session.id,
+        created_at: new Date().toISOString(),
+      },
+    ]);
+
+    if (insertError) {
+      console.error("❌ Error insertando pedido:", insertError);
+      return new Response(
+        JSON.stringify({ error: "No se pudo guardar el pedido" }),
+        { status: 500 }
+      );
+    }
+
+    return new Response(JSON.stringify({ url: session.url }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  } catch (err: any) {
+    console.error("❌ Error general en create-checkout-session:", err);
+    return new Response(JSON.stringify({ error: err.message }), {
+      status: 500,
+    });
+  }
 };
