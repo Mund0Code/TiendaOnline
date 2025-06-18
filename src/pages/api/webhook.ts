@@ -5,7 +5,7 @@ import { supabaseAdmin } from "../../lib/supabaseAdminClient";
 
 export const config = {
   api: {
-    bodyParser: false, // ¡importantísimo!
+    bodyParser: false, // imprescindible para leer el raw body
   },
 };
 
@@ -15,13 +15,13 @@ const stripe = new Stripe(import.meta.env.STRIPE_SECRET_KEY!, {
 const endpointSecret = import.meta.env.STRIPE_WEBHOOK_SECRET!;
 
 export const POST: APIRoute = async ({ request }) => {
-  // 1) Leemos el buffer crudo, sin tocarlo
+  // 1) Leemos el raw body
   const buf = await request.arrayBuffer();
   const sig = request.headers.get("stripe-signature")!;
 
   let event: Stripe.Event;
   try {
-    // 2) Construcción con Buffer.from(buf)
+    // 2) Verificamos la firma
     event = stripe.webhooks.constructEvent(
       Buffer.from(buf),
       sig,
@@ -35,22 +35,41 @@ export const POST: APIRoute = async ({ request }) => {
   if (event.type === "checkout.session.completed") {
     const session = event.data.object as Stripe.Checkout.Session;
 
-    // A) Recuperamos line items con producto expandido
-    const lineItemsRes = await stripe.checkout.sessions.listLineItems(
-      session.id,
-      {
+    // A) Recuperar line items con product expandido
+    const { data: lineItems = [] } =
+      await stripe.checkout.sessions.listLineItems(session.id, {
         limit: 100,
         expand: ["data.price.product"],
-      }
-    );
-    const lineItems = lineItemsRes.data;
+      });
 
-    // B) Montamos el name concatenando todos los nombres
-    const name = lineItems
-      .map((li) => ((li.price as any).product as Stripe.Product).name ?? "—")
-      .join(", ");
+    // B) Construir el campo `name` uniendo todos los nombres
+    const itemNames = lineItems.map((li) => {
+      const prod = (li.price as any).product as Stripe.Product;
+      return prod.name ?? li.description ?? "Producto";
+    });
+    const name = itemNames.join(", ");
 
-    // C) Para cada línea, busca el uuid en tu tabla products
+    // C) Insertar la orden y capturar su ID
+    const amount = (session.amount_total ?? 0) / 100;
+    const { data: insertedOrder, error: orderErr } = await supabaseAdmin
+      .from("orders")
+      .insert({
+        checkout_session_id: session.id,
+        customer_id: session.client_reference_id,
+        customer_email: session.customer_details?.email,
+        amount_total: amount,
+        status: "paid",
+        name,
+      })
+      .select() // para devolver el objeto insertado
+      .single(); // un solo registro
+
+    if (orderErr || !insertedOrder) {
+      console.error("Error creating order:", orderErr);
+      return new Response("Error creating order", { status: 500 });
+    }
+
+    // D) Para cada line item, buscamos el UUID real de tu tabla products
     const itemsToInsert = [];
     for (const li of lineItems) {
       const stripeProdId = (li.price as any).product.id as string;
@@ -59,29 +78,37 @@ export const POST: APIRoute = async ({ request }) => {
         .select("id")
         .eq("stripe_product_id", stripeProdId)
         .single();
+
       if (prodErr || !prodRec) {
-        console.warn(`No encuentro producto DB para Stripe ID ${stripeProdId}`);
+        console.warn(
+          `⚠️ No encuentro producto DB para Stripe ID ${stripeProdId}`
+        );
         continue;
       }
+
       itemsToInsert.push({
-        order_id: order.id,
-        product_id: prodRec.id, // ← el UUID que tu DB entiende
+        order_id: insertedOrder.id, // <-- aquí usamos insertedOrder.id
+        product_id: prodRec.id, // el UUID de tu tabla products
         unit_price: (li.price as any).unit_amount ?? 0,
         quantity: li.quantity ?? 1,
       });
     }
 
-    // D) Insertamos cada línea en order_items
-    const { error: itemsErr } = await supabaseAdmin
-      .from("order_items")
-      .insert(itemsToInsert);
+    // E) Insertamos las líneas
+    if (itemsToInsert.length) {
+      const { error: itemsErr } = await supabaseAdmin
+        .from("order_items")
+        .insert(itemsToInsert);
 
-    if (itemsErr) {
-      console.error("Error creating order_items:", itemsErr);
-      return new Response("Error creating order items", { status: 500 });
+      if (itemsErr) {
+        console.error("Error creating order_items:", itemsErr);
+        return new Response("Error creating order items", { status: 500 });
+      }
     }
 
-    console.log(`✓ Order ${order.id} + ${itemsToInsert.length} items created`);
+    console.log(
+      `✅ Order ${insertedOrder.id} + ${itemsToInsert.length} items created`
+    );
   }
 
   return new Response(null, { status: 200 });
