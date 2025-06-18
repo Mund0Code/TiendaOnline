@@ -4,8 +4,7 @@ import { Stripe } from "stripe";
 import { supabaseAdmin } from "../../lib/supabaseAdminClient";
 
 export const config = {
-  // Muy importante: deshabilita el body parser para leer el raw body
-  api: { bodyParser: false },
+  api: { bodyParser: false }, // ✱ muy importante
 };
 
 const stripe = new Stripe(import.meta.env.STRIPE_SECRET_KEY!, {
@@ -14,46 +13,33 @@ const stripe = new Stripe(import.meta.env.STRIPE_SECRET_KEY!, {
 const endpointSecret = import.meta.env.STRIPE_WEBHOOK_SECRET!;
 
 export const POST: APIRoute = async ({ request }) => {
-  // --- LOG DE CABECERAS para depurar en Vercel ---
-  console.log("▶️ Headers recibidas:", Object.fromEntries(request.headers));
-
-  // 1) Lee el raw body como ArrayBuffer
-  const buf = await request.arrayBuffer();
+  // 1) Obtén el cuerpo sin parsear como texto
+  const bodyText = await request.text();
   const sig = request.headers.get("stripe-signature")!;
   let event: Stripe.Event;
 
   try {
-    // 2) Verifica firma y construye evento
-    event = stripe.webhooks.constructEvent(
-      Buffer.from(buf),
-      sig,
-      endpointSecret
-    );
+    // 2) Construye el evento a partir del texto crudo
+    event = stripe.webhooks.constructEvent(bodyText, sig, endpointSecret);
   } catch (err: any) {
     console.error("❌ Webhook signature error:", err.message);
     return new Response(`Webhook Error: ${err.message}`, { status: 400 });
   }
 
-  // 3) Procesa sólo el evento de pago completado
   if (event.type === "checkout.session.completed") {
     const session = event.data.object as Stripe.Checkout.Session;
 
-    // A) Recupera todos los line_items con producto expandido
+    // A) Lee line_items con producto expandido
     const lineItemsRes = await stripe.checkout.sessions.listLineItems(
       session.id,
-      {
-        limit: 100,
-        expand: ["data.price.product"],
-      }
+      { limit: 100, expand: ["data.price.product"] }
     );
     const lineItems = lineItemsRes.data;
 
-    // B) Construye cadena de nombres de producto
-    const itemNames = lineItems.map((li) => {
-      const prod = (li.price as any).product as Stripe.Product;
-      return prod.name ?? li.description ?? "Producto";
-    });
-    const name = itemNames.join(", ");
+    // B) Prepara el nombre concatenado
+    const name = lineItems
+      .map((li) => ((li.price as any).product as Stripe.Product).name ?? "—")
+      .join(", ");
 
     // C) Inserta la orden
     const amount = (session.amount_total ?? 0) / 100;
@@ -68,29 +54,27 @@ export const POST: APIRoute = async ({ request }) => {
         name,
       })
       .single();
-
     if (orderErr || !order) {
-      console.error("Error creando order:", orderErr);
-      return new Response("Error creating order", { status: 500 });
+      console.error("Error creating order:", orderErr);
+      return new Response("Order insert failed", { status: 500 });
     }
 
-    // D) Inserta cada línea en order_items
+    // D) Inserta las líneas
     const itemsToInsert = lineItems.map((li) => ({
       order_id: order.id,
-      product_id: (li.price as any).product.id,
+      product_id: ((li.price as any).product as Stripe.Product).id,
       unit_price: (li.price as any).unit_amount ?? 0,
       quantity: li.quantity ?? 1,
     }));
     const { error: itemsErr } = await supabaseAdmin
       .from("order_items")
       .insert(itemsToInsert);
-
     if (itemsErr) {
-      console.error("Error creando order_items:", itemsErr);
-      return new Response("Error creating order items", { status: 500 });
+      console.error("Error creating order_items:", itemsErr);
+      return new Response("Order items insert failed", { status: 500 });
     }
 
-    console.log(`✓ Order ${order.id} + ${itemsToInsert.length} items creados`);
+    console.log(`✓ Order ${order.id} + ${itemsToInsert.length} items created`);
   }
 
   return new Response(null, { status: 200 });
