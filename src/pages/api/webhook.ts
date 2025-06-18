@@ -4,7 +4,9 @@ import { Stripe } from "stripe";
 import { supabaseAdmin } from "../../lib/supabaseAdminClient";
 
 export const config = {
-  api: { bodyParser: false }, // ✱ muy importante
+  api: {
+    bodyParser: false, // muy importante: deshabilitar el parser
+  },
 };
 
 const stripe = new Stripe(import.meta.env.STRIPE_SECRET_KEY!, {
@@ -13,14 +15,18 @@ const stripe = new Stripe(import.meta.env.STRIPE_SECRET_KEY!, {
 const endpointSecret = import.meta.env.STRIPE_WEBHOOK_SECRET!;
 
 export const POST: APIRoute = async ({ request }) => {
-  // 1) Obtén el cuerpo sin parsear como texto
-  const bodyText = await request.text();
+  // 1) Leer el body sin parsear
+  const buf = await request.arrayBuffer();
   const sig = request.headers.get("stripe-signature")!;
-  let event: Stripe.Event;
 
+  let event: Stripe.Event;
   try {
-    // 2) Construye el evento a partir del texto crudo
-    event = stripe.webhooks.constructEvent(bodyText, sig, endpointSecret);
+    // 2) Construir evento con el buffer crudo
+    event = stripe.webhooks.constructEvent(
+      Buffer.from(buf),
+      sig,
+      endpointSecret
+    );
   } catch (err: any) {
     console.error("❌ Webhook signature error:", err.message);
     return new Response(`Webhook Error: ${err.message}`, { status: 400 });
@@ -29,19 +35,19 @@ export const POST: APIRoute = async ({ request }) => {
   if (event.type === "checkout.session.completed") {
     const session = event.data.object as Stripe.Checkout.Session;
 
-    // A) Lee line_items con producto expandido
+    // A) Listar line items con producto expandido
     const lineItemsRes = await stripe.checkout.sessions.listLineItems(
       session.id,
       { limit: 100, expand: ["data.price.product"] }
     );
     const lineItems = lineItemsRes.data;
 
-    // B) Prepara el nombre concatenado
+    // B) Generar nombre concatenado
     const name = lineItems
       .map((li) => ((li.price as any).product as Stripe.Product).name ?? "—")
       .join(", ");
 
-    // C) Inserta la orden
+    // C) Insertar orden
     const amount = (session.amount_total ?? 0) / 100;
     const { data: order, error: orderErr } = await supabaseAdmin
       .from("orders")
@@ -56,10 +62,10 @@ export const POST: APIRoute = async ({ request }) => {
       .single();
     if (orderErr || !order) {
       console.error("Error creating order:", orderErr);
-      return new Response("Order insert failed", { status: 500 });
+      return new Response("Error creating order", { status: 500 });
     }
 
-    // D) Inserta las líneas
+    // D) Insertar cada línea en order_items
     const itemsToInsert = lineItems.map((li) => ({
       order_id: order.id,
       product_id: ((li.price as any).product as Stripe.Product).id,
@@ -71,7 +77,7 @@ export const POST: APIRoute = async ({ request }) => {
       .insert(itemsToInsert);
     if (itemsErr) {
       console.error("Error creating order_items:", itemsErr);
-      return new Response("Order items insert failed", { status: 500 });
+      return new Response("Error creating order items", { status: 500 });
     }
 
     console.log(`✓ Order ${order.id} + ${itemsToInsert.length} items created`);
