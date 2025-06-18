@@ -5,7 +5,7 @@ import { supabaseAdmin } from "../../lib/supabaseAdminClient";
 
 export const config = {
   api: {
-    bodyParser: false, // importante: deshabilitar el body parser
+    bodyParser: true, // importante: deshabilitar el body parser
   },
 };
 
@@ -15,6 +15,8 @@ const stripe = new Stripe(import.meta.env.STRIPE_SECRET_KEY!, {
 const endpointSecret = import.meta.env.STRIPE_WEBHOOK_SECRET!;
 
 export const POST: APIRoute = async ({ request }) => {
+  console.log("🔔 Webhook hit at", new Date().toISOString());
+
   // 1) Leer el body sin parsear
   const buf = await request.arrayBuffer();
   const sig = request.headers.get("stripe-signature")!;
