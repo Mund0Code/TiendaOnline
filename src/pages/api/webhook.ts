@@ -4,9 +4,8 @@ import { Stripe } from "stripe";
 import { supabaseAdmin } from "../../lib/supabaseAdminClient";
 
 export const config = {
-  api: {
-    bodyParser: true, // importante: deshabilitar el body parser
-  },
+  // Muy importante: deshabilita el body parser para poder leer el raw body
+  api: { bodyParser: false },
 };
 
 const stripe = new Stripe(import.meta.env.STRIPE_SECRET_KEY!, {
@@ -15,25 +14,28 @@ const stripe = new Stripe(import.meta.env.STRIPE_SECRET_KEY!, {
 const endpointSecret = import.meta.env.STRIPE_WEBHOOK_SECRET!;
 
 export const POST: APIRoute = async ({ request }) => {
-  console.log("🔔 Webhook hit at", new Date().toISOString());
-
-  // 1) Leer el body sin parsear
+  // 1) Lee el raw body como ArrayBuffer
   const buf = await request.arrayBuffer();
   const sig = request.headers.get("stripe-signature")!;
 
   let event: Stripe.Event;
   try {
-    event = stripe.webhooks.constructEvent(buf, sig, endpointSecret);
+    // 2) Verifica firma y construye evento
+    event = stripe.webhooks.constructEvent(
+      Buffer.from(buf),
+      sig,
+      endpointSecret
+    );
   } catch (err: any) {
     console.error("❌ Webhook signature error:", err.message);
     return new Response(`Webhook Error: ${err.message}`, { status: 400 });
   }
 
-  // Solo procesamos la finalización de checkout
+  // 3) Sólo nos importa checkout.session.completed
   if (event.type === "checkout.session.completed") {
     const session = event.data.object as Stripe.Checkout.Session;
 
-    // 2) Recuperar los line_items con el producto expandido
+    // A) Obtén todos los items con datos de producto
     const lineItemsRes = await stripe.checkout.sessions.listLineItems(
       session.id,
       {
@@ -43,21 +45,21 @@ export const POST: APIRoute = async ({ request }) => {
     );
     const lineItems = lineItemsRes.data;
 
-    // 3) Construir el nombre compuesto de la orden
+    // B) Monta el nombre (unión de todos los products)
     const itemNames = lineItems.map((li) => {
-      const product = (li.price as any).product as Stripe.Product;
-      return product.name ?? "Producto sin nombre";
+      const prod = (li.price as any).product as Stripe.Product;
+      return prod.name ?? li.description ?? "Producto";
     });
     const name = itemNames.join(", ");
 
-    // 4) Insertar la orden en Supabase
+    // C) Inserta la orden
     const amount = (session.amount_total ?? 0) / 100;
     const { data: order, error: orderErr } = await supabaseAdmin
       .from("orders")
       .insert({
         checkout_session_id: session.id,
         customer_id: session.client_reference_id,
-        customer_email: session.customer_details?.email ?? null,
+        customer_email: session.customer_details?.email,
         amount_total: amount,
         status: "paid",
         name,
@@ -65,11 +67,11 @@ export const POST: APIRoute = async ({ request }) => {
       .single();
 
     if (orderErr || !order) {
-      console.error("❌ Error creando order:", orderErr);
+      console.error("Error creating order:", orderErr);
       return new Response("Error creating order", { status: 500 });
     }
 
-    // 5) Insertar cada línea en order_items
+    // D) Inserta cada línea en order_items
     const itemsToInsert = lineItems.map((li) => ({
       order_id: order.id,
       product_id: (li.price as any).product.id,
@@ -81,15 +83,12 @@ export const POST: APIRoute = async ({ request }) => {
       .insert(itemsToInsert);
 
     if (itemsErr) {
-      console.error("❌ Error creando order_items:", itemsErr);
+      console.error("Error creating order_items:", itemsErr);
       return new Response("Error creating order items", { status: 500 });
     }
 
-    console.log(
-      `✅ Order ${order.id} creada con ${itemsToInsert.length} ítems`
-    );
+    console.log(`✓ Order ${order.id} + ${itemsToInsert.length} items created`);
   }
 
-  // Responder siempre 200 para que Stripe no reintente
   return new Response(null, { status: 200 });
 };
