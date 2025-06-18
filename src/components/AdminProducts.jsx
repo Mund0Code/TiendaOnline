@@ -22,7 +22,7 @@ export default function AdminProducts() {
     fetchProducts();
   }, []);
 
-  // 1) Traer categorías
+  // 1) Traer categorías.
   const fetchCategories = async () => {
     const { data, error } = await supabase
       .from("categories")
