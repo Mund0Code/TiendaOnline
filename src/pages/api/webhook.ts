@@ -4,7 +4,7 @@ import { Stripe } from "stripe";
 import { supabaseAdmin } from "../../lib/supabaseAdminClient";
 
 export const config = {
-  // Muy importante: deshabilita el body parser para poder leer el raw body
+  // Muy importante: deshabilita el body parser para leer el raw body
   api: { bodyParser: false },
 };
 
@@ -14,11 +14,14 @@ const stripe = new Stripe(import.meta.env.STRIPE_SECRET_KEY!, {
 const endpointSecret = import.meta.env.STRIPE_WEBHOOK_SECRET!;
 
 export const POST: APIRoute = async ({ request }) => {
+  // --- LOG DE CABECERAS para depurar en Vercel ---
+  console.log("▶️ Headers recibidas:", Object.fromEntries(request.headers));
+
   // 1) Lee el raw body como ArrayBuffer
   const buf = await request.arrayBuffer();
   const sig = request.headers.get("stripe-signature")!;
-
   let event: Stripe.Event;
+
   try {
     // 2) Verifica firma y construye evento
     event = stripe.webhooks.constructEvent(
@@ -31,11 +34,11 @@ export const POST: APIRoute = async ({ request }) => {
     return new Response(`Webhook Error: ${err.message}`, { status: 400 });
   }
 
-  // 3) Sólo nos importa checkout.session.completed
+  // 3) Procesa sólo el evento de pago completado
   if (event.type === "checkout.session.completed") {
     const session = event.data.object as Stripe.Checkout.Session;
 
-    // A) Obtén todos los items con datos de producto
+    // A) Recupera todos los line_items con producto expandido
     const lineItemsRes = await stripe.checkout.sessions.listLineItems(
       session.id,
       {
@@ -45,7 +48,7 @@ export const POST: APIRoute = async ({ request }) => {
     );
     const lineItems = lineItemsRes.data;
 
-    // B) Monta el nombre (unión de todos los products)
+    // B) Construye cadena de nombres de producto
     const itemNames = lineItems.map((li) => {
       const prod = (li.price as any).product as Stripe.Product;
       return prod.name ?? li.description ?? "Producto";
@@ -67,7 +70,7 @@ export const POST: APIRoute = async ({ request }) => {
       .single();
 
     if (orderErr || !order) {
-      console.error("Error creating order:", orderErr);
+      console.error("Error creando order:", orderErr);
       return new Response("Error creating order", { status: 500 });
     }
 
@@ -83,11 +86,11 @@ export const POST: APIRoute = async ({ request }) => {
       .insert(itemsToInsert);
 
     if (itemsErr) {
-      console.error("Error creating order_items:", itemsErr);
+      console.error("Error creando order_items:", itemsErr);
       return new Response("Error creating order items", { status: 500 });
     }
 
-    console.log(`✓ Order ${order.id} + ${itemsToInsert.length} items created`);
+    console.log(`✓ Order ${order.id} + ${itemsToInsert.length} items creados`);
   }
 
   return new Response(null, { status: 200 });
