@@ -38,7 +38,10 @@ export const POST: APIRoute = async ({ request }) => {
     // A) Recuperamos line items con producto expandido
     const lineItemsRes = await stripe.checkout.sessions.listLineItems(
       session.id,
-      { limit: 100, expand: ["data.price.product"] }
+      {
+        limit: 100,
+        expand: ["data.price.product"],
+      }
     );
     const lineItems = lineItemsRes.data;
 
@@ -47,36 +50,28 @@ export const POST: APIRoute = async ({ request }) => {
       .map((li) => ((li.price as any).product as Stripe.Product).name ?? "—")
       .join(", ");
 
-    // C) Insertamos orden **y** pedimos la fila de vuelta con .select().single()
-    const amount = (session.amount_total ?? 0) / 100;
-    const { data: order, error: orderErr } = await supabaseAdmin
-      .from("orders")
-      .insert(
-        {
-          checkout_session_id: session.id,
-          customer_id: session.client_reference_id,
-          customer_email: session.customer_details?.email,
-          amount_total: amount,
-          status: "paid",
-          name,
-        },
-        { returning: "representation" } // o bien .select().single() abajo
-      )
-      .select() // ← importante: así nos devuelve la fila
-      .single();
-
-    if (orderErr || !order) {
-      console.error("Error creating order:", orderErr);
-      return new Response("Error creating order", { status: 500 });
+    // C) Para cada línea, busca el uuid en tu tabla products
+    const itemsToInsert = [];
+    for (const li of lineItems) {
+      const stripeProdId = (li.price as any).product.id as string;
+      const { data: prodRec, error: prodErr } = await supabaseAdmin
+        .from("products")
+        .select("id")
+        .eq("stripe_product_id", stripeProdId)
+        .single();
+      if (prodErr || !prodRec) {
+        console.warn(`No encuentro producto DB para Stripe ID ${stripeProdId}`);
+        continue;
+      }
+      itemsToInsert.push({
+        order_id: order.id,
+        product_id: prodRec.id, // ← el UUID que tu DB entiende
+        unit_price: (li.price as any).unit_amount ?? 0,
+        quantity: li.quantity ?? 1,
+      });
     }
 
     // D) Insertamos cada línea en order_items
-    const itemsToInsert = lineItems.map((li) => ({
-      order_id: order.id,
-      product_id: ((li.price as any).product as Stripe.Product).id,
-      unit_price: (li.price as any).unit_amount ?? 0,
-      quantity: li.quantity ?? 1,
-    }));
     const { error: itemsErr } = await supabaseAdmin
       .from("order_items")
       .insert(itemsToInsert);
