@@ -42,7 +42,7 @@ export default function AdminProducts() {
         name,
         price,
         category_id,
-        category:categories!fk_products_category(
+        category:categories!products_category_id_fkey(
       name
     )
       `
