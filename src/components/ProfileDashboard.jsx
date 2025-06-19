@@ -31,7 +31,7 @@ export default function ProfileDashboard() {
     });
   }, []);
 
-  // 2) refreshMetrics - CORREGIDO
+  // 2) refreshMetrics - Versión que maneja ambas estructuras
   const refreshMetrics = useCallback(async () => {
     if (!user) return;
 
@@ -45,6 +45,13 @@ export default function ProfileDashboard() {
         downloaded,
         invoice_url,
         invoice_downloaded,
+        product_id,
+        name,
+        product:products!orders_product_id_fkey (
+          id,
+          name,
+          file_path
+        ),
         order_items:order_items!order_items_order_id_fkey (
           id,
           product_id,
@@ -80,19 +87,43 @@ export default function ProfileDashboard() {
       orders.filter((o) => !o.invoice_downloaded).length
     );
 
-    // Últimos 3 para la tabla - CORREGIDO
+    // Últimos 3 para la tabla - Maneja ambas estructuras
     const recentOrdersData = orders.slice(0, 3).map((o) => {
-      // Obtenemos el primer item del pedido
-      const firstItem =
-        o.order_items && o.order_items.length > 0 ? o.order_items[0] : null;
+      let productName = "Producto no encontrado";
+      let productId = null;
 
-      console.log("🔍 Processing order:", o.id, "First item:", firstItem);
+      // Opción 1: Usar product_id directo de la tabla orders
+      if (o.product_id && o.product) {
+        productName = o.product.name;
+        productId = o.product.id;
+      }
+      // Opción 2: Usar el primer item de order_items
+      else if (o.order_items && o.order_items.length > 0) {
+        const firstItem = o.order_items[0];
+        if (firstItem.product) {
+          productName = firstItem.product.name;
+          productId = firstItem.product.id;
+        }
+      }
+      // Opción 3: Usar el campo name de la orden si existe
+      else if (o.name) {
+        productName = o.name;
+        // En este caso no tenemos product_id, así que será null
+      }
+
+      console.log(`🔍 Order ${o.id}:`, {
+        orderProductId: o.product_id,
+        orderProduct: o.product,
+        orderItems: o.order_items,
+        finalProductName: productName,
+        finalProductId: productId,
+      });
 
       return {
         id: o.id,
         created_at: o.created_at,
-        productName: firstItem?.product?.name || "Producto no encontrado",
-        product_id: firstItem?.product?.id || null,
+        productName,
+        product_id: productId,
         book_downloaded: o.downloaded,
         invoice_downloaded: o.invoice_downloaded,
         invoice_url: o.invoice_url,
@@ -206,27 +237,44 @@ export default function ProfileDashboard() {
                         <td className="py-2">
                           {new Date(o.created_at).toLocaleDateString("es-ES")}
                         </td>
-                        <td className="py-2">{o.productName}</td>
+                        <td className="py-2">
+                          <span
+                            className={
+                              o.product_id ? "text-gray-900" : "text-gray-500"
+                            }
+                          >
+                            {o.productName}
+                          </span>
+                          {!o.product_id && (
+                            <span className="text-xs text-red-500 block">
+                              (Sin ID de producto)
+                            </span>
+                          )}
+                        </td>
                         <td className="py-2">
                           <div className="flex space-x-2">
-                            {!o.book_downloaded && o.product_id && (
+                            {!o.book_downloaded && o.product_id ? (
                               <BookDownloadButton
                                 orderId={o.id}
                                 productId={o.product_id}
                                 onDownloaded={refreshMetrics}
                               />
+                            ) : !o.book_downloaded && !o.product_id ? (
+                              <span className="text-sm text-orange-500 px-2 py-1 bg-orange-50 rounded">
+                                Producto no vinculado
+                              </span>
+                            ) : (
+                              <span className="text-sm text-green-500 px-2 py-1 bg-green-50 rounded">
+                                ✓ Descargado
+                              </span>
                             )}
+
                             {o.invoice_url && !o.invoice_downloaded && (
                               <InvoiceDownloadButton
                                 orderId={o.id}
                                 url={o.invoice_url}
                                 onDownloaded={refreshMetrics}
                               />
-                            )}
-                            {!o.product_id && (
-                              <span className="text-sm text-gray-500">
-                                Producto no disponible
-                              </span>
                             )}
                           </div>
                         </td>

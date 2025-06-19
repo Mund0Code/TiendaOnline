@@ -1,4 +1,4 @@
-// ✅ Reemplaza este archivo webhook.ts completo
+// ✅ webhook.ts corregido para manejar ambas estructuras
 import type { APIRoute } from "astro";
 import { Stripe } from "stripe";
 import { supabaseAdmin } from "../../lib/supabaseAdminClient";
@@ -48,6 +48,27 @@ export const POST: APIRoute = async ({ request }) => {
     const name = itemNames.join(", ");
 
     const amount = (session.amount_total ?? 0) / 100;
+
+    // Buscar el primer producto para el campo product_id en orders
+    let firstProductId = null;
+    if (lineItems.length > 0) {
+      const firstLineItem = lineItems[0];
+      const stripeProduct = (firstLineItem.price as any).product;
+      const stripeProdId =
+        typeof stripeProduct === "string" ? stripeProduct : stripeProduct?.id;
+
+      if (stripeProdId) {
+        const { data: productData } = await supabaseAdmin
+          .from("products")
+          .select("id")
+          .eq("stripe_product_id", stripeProdId)
+          .single();
+
+        firstProductId = productData?.id || null;
+      }
+    }
+
+    // Insertar orden con product_id del primer producto
     const { data: orderData, error: orderErr } = await supabaseAdmin
       .from("orders")
       .insert({
@@ -57,6 +78,7 @@ export const POST: APIRoute = async ({ request }) => {
         amount_total: amount,
         status: "paid",
         name,
+        product_id: firstProductId, // Agregamos el product_id aquí
         created_at: new Date().toISOString(),
       })
       .select()
@@ -69,6 +91,7 @@ export const POST: APIRoute = async ({ request }) => {
 
     console.log("✅ Orden insertada:", orderData);
 
+    // Insertar todos los items en order_items
     const itemsToInsert = [];
     for (const li of lineItems) {
       const stripeProduct = (li.price as any).product;
