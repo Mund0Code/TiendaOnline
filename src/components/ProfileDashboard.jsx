@@ -56,6 +56,7 @@ export default function ProfileDashboard() {
 
       .eq("customer_id", user.id)
       .order("created_at", { ascending: false });
+    console.log(JSON.stringify(orders, null, 2));
 
     console.log("📦 orders:", orders, "error:", error);
 
