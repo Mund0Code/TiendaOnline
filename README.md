@@ -60,8 +60,8 @@ Un proyecto de comercio electrónico completo, construido con **Astro**, **React
 
    ```bash
    # Supabase
-    SUPABASE_URL=https://xyzcompany.supabase.co
-    SUPABASE_ANON_KEY=public-anon-key
+    PUBLIC_SUPABASE_URL=https://xyzcompany.supabase.co
+    PUBLIC_SUPABASE_ANON_KEY=public-anon-key
     SUPABASE_SERVICE_ROLE_KEY=service-role-key
 
     # Stripe
