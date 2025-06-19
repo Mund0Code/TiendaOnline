@@ -62,12 +62,17 @@ export default function AdminHome() {
               )
             : 0;
 
-        console.log("📊 Stats cargadas:", {
-          totalOrders,
-          totalProducts,
-          totalClients,
-          totalIncome,
-        });
+        const { data: allUsers, error } = await supabase
+          .from("profiles")
+          .select("id, is_admin");
+
+        const totalClientes = allUsers.filter((u) => !u.is_admin).length;
+        const totalAdmins = allUsers.filter((u) => u.is_admin).length;
+        const totalUsers = allUsers.length;
+
+        console.log(`Clientes: ${totalClientes}`);
+        console.log(`Administradores: ${totalAdmins}`);
+        console.log(`Total Usuarios: ${totalUsers}`);
 
         setStats({
           totalIncome: totalIncome.toFixed(2),
