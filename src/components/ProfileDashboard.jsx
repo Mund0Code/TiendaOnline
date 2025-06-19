@@ -47,7 +47,8 @@ export default function ProfileDashboard() {
     order_items:order_items!order_items_order_id_fkey (
       product:products!order_items_product_id_fkey (
         id,
-        name
+        name,
+        file_path
       )
     )
   `
