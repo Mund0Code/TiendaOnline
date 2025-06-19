@@ -38,17 +38,21 @@ export default function ProfileDashboard() {
       .from("orders")
       .select(
         `
-          id,
-          created_at,
-          amount_total,
-          downloaded,
-          invoice_url,
-          invoice_downloaded,
-          order_items (
-            product:products(name)
-          )
-        `
+    id,
+    created_at,
+    amount_total,
+    downloaded,
+    invoice_url,
+    invoice_downloaded,
+    order_items:order_items!order_items_order_id_fkey (
+      product:products!order_items_product_id_fkey (
+        id,
+        name
       )
+    )
+  `
+      )
+
       .eq("customer_id", user.id)
       .order("created_at", { ascending: false });
 

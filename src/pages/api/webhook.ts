@@ -72,7 +72,11 @@ export const POST: APIRoute = async ({ request }) => {
     // D) Para cada line item, buscamos el UUID real de tu tabla products
     const itemsToInsert = [];
     for (const li of lineItems) {
-      const stripeProdId = (li.price as any).product.id as string;
+      const stripeProdId = (li.price as any).product?.id as string;
+      const unitAmount = (li.price as any).unit_amount ?? 0;
+      const quantity = li.quantity ?? 1;
+
+      // Verifica si existe un producto con ese stripe_product_id
       const { data: prodRec, error: prodErr } = await supabaseAdmin
         .from("products")
         .select("id")
@@ -87,23 +91,11 @@ export const POST: APIRoute = async ({ request }) => {
       }
 
       itemsToInsert.push({
-        order_id: insertedOrder.id, // <-- aquí usamos insertedOrder.id
-        product_id: prodRec.id, // el UUID de tu tabla products
-        unit_price: (li.price as any).unit_amount ?? 0,
-        quantity: li.quantity ?? 1,
+        order_id: insertedOrder.id,
+        product_id: prodRec.id,
+        unit_price: unitAmount,
+        quantity,
       });
-    }
-
-    // E) Insertamos las líneas
-    if (itemsToInsert.length) {
-      const { error: itemsErr } = await supabaseAdmin
-        .from("order_items")
-        .insert(itemsToInsert);
-
-      if (itemsErr) {
-        console.error("Error creating order_items:", itemsErr);
-        return new Response("Error creating order items", { status: 500 });
-      }
     }
 
     console.log(
