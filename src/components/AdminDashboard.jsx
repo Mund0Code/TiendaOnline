@@ -10,7 +10,6 @@ import AdminCategories from "./AdminCategories.jsx";
 import AdminUsers from "./AdminUsers.jsx";
 import AdminAnalytics from "./AdminAnalytics.jsx";
 import AdminSupport from "./AdminSupport.jsx";
-import Sidebar from "./Sidebar.jsx";
 
 const TABS = {
   home: {
