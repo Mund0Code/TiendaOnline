@@ -32,7 +32,7 @@ export default function LoginForm() {
         .from("profiles")
         .select("is_admin")
         .eq("id", user.id)
-        .single();
+        .maybeSingle();
       if (profileError) throw profileError;
 
       // 4️⃣ Redirigimos según rol

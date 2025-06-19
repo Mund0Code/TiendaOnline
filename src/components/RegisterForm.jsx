@@ -84,76 +84,35 @@ export default function RegisterForm() {
 
       console.log("Usuario creado:", user.id);
 
-      // 2) Crear perfil usando endpoint API en lugar de cliente directo
-      // Esto evita problemas de RLS
-      try {
-        const profileResponse = await fetch("/api/create-profile", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            userId: user.id,
-            fullName: form.name.trim(),
-            email: user.email,
-          }),
-        });
-
-        const profileResult = await profileResponse.json();
-
-        if (!profileResponse.ok) {
-          throw new Error(profileResult.error || "Error creando perfil");
-        }
-
-        console.log("Perfil creado exitosamente");
-      } catch (profileError) {
-        console.error("Error con API de perfil:", profileError);
-
-        // Fallback: intentar crear perfil directamente después de confirmar sesión
-        console.log("Intentando crear perfil directamente...");
-
-        // Esperar un momento para que la sesión se establezca
-        await new Promise((resolve) => setTimeout(resolve, 1000));
-
-        // Verificar si el usuario está autenticado
-        const { data: sessionData } = await supabase.auth.getSession();
-
-        if (sessionData?.session) {
-          console.log("Sesión confirmada, creando perfil...");
-
-          const { error: directProfileError } = await supabase
-            .from("profiles")
-            .upsert(
-              [
-                {
-                  id: user.id,
-                  full_name: form.name.trim(),
-                  email: user.email,
-                  created_at: new Date().toISOString(),
-                },
-              ],
-              {
-                onConflict: "id",
-              }
-            );
-
-          if (directProfileError) {
-            console.error("Error directo creando perfil:", directProfileError);
-
-            // Si sigue fallando, es un problema de RLS
-            if (directProfileError.message.includes("row-level security")) {
-              setError(
-                "Error de configuración de seguridad. El perfil se creará automáticamente al confirmar tu email."
-              );
-            } else {
-              setError("Error al crear perfil: " + directProfileError.message);
-            }
+      // 2) Crear perfil directamente
+      const { error: directProfileError } = await supabase
+        .from("profiles")
+        .upsert(
+          [
+            {
+              id: user.id,
+              full_name: form.name.trim(),
+              email: user.email,
+              created_at: new Date().toISOString(),
+            },
+          ],
+          {
+            onConflict: "id",
           }
-        } else {
-          console.log(
-            "No hay sesión activa, el perfil se creará al confirmar email"
+        );
+
+      if (directProfileError) {
+        console.error("Error creando perfil:", directProfileError);
+
+        if (directProfileError.message.includes("row-level security")) {
+          setError(
+            "Error de seguridad (RLS): el perfil se creará automáticamente al confirmar tu email."
           );
+        } else {
+          setError("Error al crear perfil: " + directProfileError.message);
         }
+      } else {
+        console.log("Perfil creado exitosamente");
       }
 
       // 3) Éxito (incluso si el perfil no se pudo crear por RLS)
