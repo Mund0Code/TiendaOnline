@@ -1,6 +1,6 @@
 // src/components/AdminUsers.jsx
 import React, { useState, useEffect } from "react";
-import { supabase } from "../lib/supabaseClient";
+import { supabaseAdmin } from "../lib/supabaseAdminClient"; // ✅ Usar cliente admin
 
 export default function AdminUsers() {
   const [users, setUsers] = useState([]);
@@ -12,7 +12,8 @@ export default function AdminUsers() {
   useEffect(() => {
     (async () => {
       try {
-        const { data, error: fetchError } = await supabase
+        // ✅ Usar supabaseAdmin para ignorar RLS
+        const { data, error: fetchError } = await supabaseAdmin
           .from("profiles")
           .select("id, full_name, email, is_admin, created_at")
           .order("created_at", { ascending: false });
@@ -21,6 +22,7 @@ export default function AdminUsers() {
           throw fetchError;
         }
         setUsers(data);
+        console.log("✅ Usuarios cargados:", data.length);
       } catch (err) {
         console.error("Error cargando usuarios:", err);
         setError(err.message);
@@ -29,6 +31,91 @@ export default function AdminUsers() {
       }
     })();
   }, []);
+
+  // Función para refrescar usuarios
+  const refreshUsers = async () => {
+    setLoading(true);
+    try {
+      const { data, error: fetchError } = await supabaseAdmin
+        .from("profiles")
+        .select("id, full_name, email, is_admin, created_at")
+        .order("created_at", { ascending: false });
+
+      if (fetchError) {
+        throw fetchError;
+      }
+      setUsers(data);
+      console.log("🔄 Usuarios actualizados:", data.length);
+    } catch (err) {
+      console.error("Error actualizando usuarios:", err);
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Función para cambiar rol de usuario
+  const toggleUserRole = async (userId, currentIsAdmin) => {
+    if (
+      !confirm(
+        `¿${currentIsAdmin ? "Quitar" : "Dar"} permisos de administrador a este usuario?`
+      )
+    ) {
+      return;
+    }
+
+    try {
+      const { error } = await supabaseAdmin
+        .from("profiles")
+        .update({ is_admin: !currentIsAdmin })
+        .eq("id", userId);
+
+      if (error) {
+        throw error;
+      }
+
+      // Actualizar estado local
+      setUsers(
+        users.map((user) =>
+          user.id === userId ? { ...user, is_admin: !currentIsAdmin } : user
+        )
+      );
+
+      console.log(`✅ Rol actualizado para usuario ${userId}`);
+    } catch (err) {
+      console.error("Error actualizando rol:", err);
+      alert("Error al actualizar el rol del usuario");
+    }
+  };
+
+  // Función para eliminar usuario
+  const deleteUser = async (userId, userEmail) => {
+    if (
+      !confirm(
+        `¿Estás seguro de eliminar al usuario ${userEmail}? Esta acción no se puede deshacer.`
+      )
+    ) {
+      return;
+    }
+
+    try {
+      const { error } = await supabaseAdmin
+        .from("profiles")
+        .delete()
+        .eq("id", userId);
+
+      if (error) {
+        throw error;
+      }
+
+      // Actualizar estado local
+      setUsers(users.filter((user) => user.id !== userId));
+      console.log(`✅ Usuario eliminado: ${userEmail}`);
+    } catch (err) {
+      console.error("Error eliminando usuario:", err);
+      alert("Error al eliminar el usuario");
+    }
+  };
 
   // Filtrar usuarios
   const filteredUsers = users.filter((user) => {
@@ -102,6 +189,12 @@ export default function AdminUsers() {
               Error al cargar usuarios
             </h3>
             <p className="mt-1 text-sm text-red-700">{error}</p>
+            <button
+              onClick={refreshUsers}
+              className="mt-2 text-sm text-red-600 hover:text-red-500 underline"
+            >
+              Intentar de nuevo
+            </button>
           </div>
         </div>
       </div>
@@ -130,6 +223,25 @@ export default function AdminUsers() {
         <p className="mt-2 text-sm text-gray-500">
           Los nuevos usuarios aparecerán aquí cuando se registren.
         </p>
+        <button
+          onClick={refreshUsers}
+          className="mt-4 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
+        >
+          <svg
+            className="w-4 h-4 mr-2"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+            />
+          </svg>
+          Actualizar
+        </button>
       </div>
     );
   }
@@ -210,6 +322,25 @@ export default function AdminUsers() {
               <option value="client">Clientes</option>
             </select>
           </div>
+          <button
+            onClick={refreshUsers}
+            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+          >
+            <svg
+              className="w-4 h-4 mr-2"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+              />
+            </svg>
+            Actualizar
+          </button>
         </div>
       </div>
 
@@ -236,6 +367,9 @@ export default function AdminUsers() {
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Fecha de registro
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Acciones
                 </th>
               </tr>
             </thead>
@@ -299,6 +433,26 @@ export default function AdminUsers() {
                           minute: "2-digit",
                         })}
                       </span>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    <div className="flex space-x-2">
+                      <button
+                        onClick={() => toggleUserRole(user.id, user.is_admin)}
+                        className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                          user.is_admin
+                            ? "bg-yellow-100 text-yellow-800 hover:bg-yellow-200"
+                            : "bg-green-100 text-green-800 hover:bg-green-200"
+                        }`}
+                      >
+                        {user.is_admin ? "Quitar Admin" : "Hacer Admin"}
+                      </button>
+                      <button
+                        onClick={() => deleteUser(user.id, user.email)}
+                        className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800 hover:bg-red-200 transition-colors"
+                      >
+                        Eliminar
+                      </button>
                     </div>
                   </td>
                 </tr>
