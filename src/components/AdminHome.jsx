@@ -1,7 +1,7 @@
 // src/components/AdminHome.jsx
 
 import React, { useState, useEffect } from "react";
-import { supabase } from "../lib/supabaseClient";
+import { supabaseAdmin } from "../lib/supabaseAdminClient";
 import {
   BarChart,
   Bar,
@@ -38,10 +38,12 @@ export default function AdminHome() {
         // 1) Cargar métricas globales con mejor manejo de errores
         const [ordersCount, productsCount, usersCount, ordersData] =
           await Promise.allSettled([
-            supabase.from("orders").select("amount_total", { count: "exact" }),
-            supabase.from("products").select("id", { count: "exact" }),
-            supabase.from("profiles").select("id", { count: "exact" }),
-            supabase.from("orders").select("amount_total"),
+            supabaseAdmin
+              .from("orders")
+              .select("amount_total", { count: "exact" }),
+            supabaseAdmin.from("products").select("id", { count: "exact" }),
+            supabaseAdmin.from("profiles").select("id", { count: "exact" }),
+            supabaseAdmin.from("orders").select("amount_total"),
           ]);
 
         // Procesar resultados con manejo de errores
@@ -81,7 +83,7 @@ export default function AdminHome() {
         sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
         sevenDaysAgo.setHours(0, 0, 0, 0);
 
-        const { data: salesData, error: salesError } = await supabase
+        const { data: salesData, error: salesError } = await supabaseAdmin
           .from("orders")
           .select("amount_total, created_at")
           .gte("created_at", sevenDaysAgo.toISOString());
@@ -145,7 +147,7 @@ export default function AdminHome() {
       ).toISOString();
 
       // Obtener pedidos recientes (últimas 24 horas)
-      const { data: recentOrders, error: ordersError } = await supabase
+      const { data: recentOrders, error: ordersError } = await supabaseAdmin
         .from("orders")
         .select("id, amount_total, created_at")
         .gte("created_at", oneDayAgo)
@@ -169,7 +171,7 @@ export default function AdminHome() {
       }
 
       // Obtener usuarios recientes (últimas 48 horas) con mejor query
-      const { data: recentUsers, error: usersError } = await supabase
+      const { data: recentUsers, error: usersError } = await supabaseAdmin
         .from("profiles")
         .select("id, email, full_name, created_at")
         .gte("created_at", twoDaysAgo)
@@ -196,7 +198,7 @@ export default function AdminHome() {
       }
 
       // Obtener productos recientes (últimos 7 días) - SIN updated_at
-      const { data: recentProducts, error: productsError } = await supabase
+      const { data: recentProducts, error: productsError } = await supabaseAdmin
         .from("products")
         .select("id, name, created_at")
         .gte("created_at", sevenDaysAgo)
@@ -221,7 +223,7 @@ export default function AdminHome() {
 
       // Obtener mensajes de soporte recientes (si existe la tabla)
       try {
-        const { data: recentSupport, error: supportError } = await supabase
+        const { data: recentSupport, error: supportError } = await supabaseAdmin
           .from("support_messages")
           .select("id, email, subject, category, created_at")
           .gte("created_at", twoDaysAgo)
