@@ -101,6 +101,17 @@ export const POST: APIRoute = async ({ request }) => {
     console.log(
       `✅ Order ${insertedOrder.id} + ${itemsToInsert.length} items created`
     );
+
+    if (itemsToInsert.length) {
+      const { error: itemsErr } = await supabaseAdmin
+        .from("order_items")
+        .insert(itemsToInsert);
+
+      if (itemsErr) {
+        console.error("Error creating order_items:", itemsErr);
+        return new Response("Error creating order items", { status: 500 });
+      }
+    }
   }
 
   return new Response(null, { status: 200 });
