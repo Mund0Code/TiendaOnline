@@ -251,7 +251,7 @@ export default function SupportForm() {
                 Enviar otro mensaje
               </button>
               <button
-                onClick={() => (window.location.href = "/dashboard")}
+                onClick={() => (window.location.href = "/profile")}
                 className="px-6 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium"
               >
                 Volver al dashboard
