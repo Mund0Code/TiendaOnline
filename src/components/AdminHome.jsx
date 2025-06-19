@@ -40,10 +40,7 @@ export default function AdminHome() {
           await Promise.allSettled([
             supabase.from("orders").select("amount_total", { count: "exact" }),
             supabase.from("products").select("id", { count: "exact" }),
-            supabase
-              .from("profiles")
-              .select("id", { count: "exact" })
-              .eq("is_admin", false),
+            supabase.from("profiles").select("id", { count: "exact" }),
             supabase.from("orders").select("amount_total"),
           ]);
 
