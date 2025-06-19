@@ -198,25 +198,74 @@ export default function AdminProducts() {
       const fd = new FormData();
       fd.append("file", file);
 
+      console.log("Subiendo archivo:", {
+        name: file.name,
+        size: file.size,
+        type: file.type,
+      });
+
       const res = await fetch("/api/upload", {
         method: "POST",
         body: fd,
       });
 
+      console.log("Respuesta del servidor:", res.status, res.statusText);
+
+      // Obtener la respuesta como texto primero para debugging
+      const responseText = await res.text();
+      console.log("Respuesta raw:", responseText);
+
       if (!res.ok) {
-        throw new Error(`Error HTTP: ${res.status}`);
+        let errorMessage = `Error HTTP ${res.status}: ${res.statusText}`;
+
+        // Intentar parsear el error si es JSON
+        try {
+          const errorData = JSON.parse(responseText);
+          if (errorData.error) {
+            errorMessage = errorData.error;
+          } else if (errorData.message) {
+            errorMessage = errorData.message;
+          }
+        } catch (parseError) {
+          // Si no es JSON válido, usar el texto completo
+          if (responseText) {
+            errorMessage = responseText;
+          }
+        }
+
+        throw new Error(errorMessage);
       }
 
-      const data = await res.json();
+      // Intentar parsear como JSON
+      let data;
+      try {
+        data = JSON.parse(responseText);
+      } catch (parseError) {
+        throw new Error(
+          "Respuesta del servidor no es JSON válido: " + responseText
+        );
+      }
+
+      console.log("Datos recibidos:", data);
 
       if (data.error) {
         setError("Error subiendo archivo: " + data.error);
       } else if (data.path) {
+        // Usar el path para la base de datos (es lo que espera Supabase)
         setForm((f) => ({ ...f, file_path: data.path }));
+        console.log("Archivo subido exitosamente:", {
+          path: data.path,
+          publicUrl: data.publicUrl,
+          fileName: data.fileName,
+        });
       } else {
-        setError("Respuesta inesperada del servidor.");
+        setError(
+          "Respuesta inesperada del servidor. Datos recibidos: " +
+            JSON.stringify(data)
+        );
       }
     } catch (err) {
+      console.error("Error completo en uploadFile:", err);
       setError("Error subiendo archivo: " + err.message);
     } finally {
       setUploadingFile(false);
