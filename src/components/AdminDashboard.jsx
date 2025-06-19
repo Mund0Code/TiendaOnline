@@ -19,32 +19,32 @@ const TABS = {
   },
   orders: {
     label: "📦 Pedidos",
-    component: <AdminOrders />,
+    component: <AdminOrders client:load />,
     icon: "📦",
   },
   products: {
     label: "🛒 Productos",
-    component: <AdminProducts />,
+    component: <AdminProducts client:load />,
     icon: "🛒",
   },
   categories: {
     label: "🗂️ Categorías",
-    component: <AdminCategories />,
+    component: <AdminCategories client:load />,
     icon: "🗂️",
   },
   users: {
     label: "👥 Clientes",
-    component: <AdminUsers />,
+    component: <AdminUsers client:load />,
     icon: "👥",
   },
   analytics: {
     label: "📊 Analíticas",
-    component: <AdminAnalytics />,
+    component: <AdminAnalytics client:load />,
     icon: "📊",
   },
   support: {
     label: "🎧 Soporte",
-    component: <AdminSupport />,
+    component: <AdminSupport client:load />,
     icon: "🎧",
   },
 };
