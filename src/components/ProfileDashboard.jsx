@@ -31,40 +31,46 @@ export default function ProfileDashboard() {
     });
   }, []);
 
-  // 2) refreshMetrics
+  // 2) refreshMetrics - CORREGIDO
   const refreshMetrics = useCallback(async () => {
     if (!user) return;
+
     const { data: orders = [], error } = await supabase
       .from("orders")
       .select(
         `
-    id,
-    created_at,
-    amount_total,
-    downloaded,
-    invoice_url,
-    invoice_downloaded,
-    order_items:order_items!order_items_order_id_fkey (
-      product:products!order_items_product_id_fkey (
         id,
-        name,
-        file_path
+        created_at,
+        amount_total,
+        downloaded,
+        invoice_url,
+        invoice_downloaded,
+        order_items:order_items!order_items_order_id_fkey (
+          id,
+          product_id,
+          quantity,
+          unit_price,
+          product:products!order_items_product_id_fkey (
+            id,
+            name,
+            file_path
+          )
+        )
+      `
       )
-    )
-  `
-      )
-
       .eq("customer_id", user.id)
       .order("created_at", { ascending: false });
-    console.log(JSON.stringify(orders, null, 2));
 
-    console.log("📦 orders:", orders, "error:", error);
+    console.log("📦 orders completos:", JSON.stringify(orders, null, 2));
 
-    if (error) return;
+    if (error) {
+      console.error("Error fetching orders:", error);
+      return;
+    }
 
     // Totales
     setTotalOrders(orders.length);
-    const sum = orders.reduce((acc, o) => acc + Number(o.amount_total), 0);
+    const sum = orders.reduce((acc, o) => acc + Number(o.amount_total || 0), 0);
     setTotalSpent(sum);
     setAvgPerOrder(orders.length ? sum / orders.length : 0);
 
@@ -74,18 +80,27 @@ export default function ProfileDashboard() {
       orders.filter((o) => !o.invoice_downloaded).length
     );
 
-    // Últimos 3 para la tabla
-    setRecentOrders(
-      orders.slice(0, 3).map((o) => ({
+    // Últimos 3 para la tabla - CORREGIDO
+    const recentOrdersData = orders.slice(0, 3).map((o) => {
+      // Obtenemos el primer item del pedido
+      const firstItem =
+        o.order_items && o.order_items.length > 0 ? o.order_items[0] : null;
+
+      console.log("🔍 Processing order:", o.id, "First item:", firstItem);
+
+      return {
         id: o.id,
         created_at: o.created_at,
-        productName: o.order_items?.[0]?.product?.name || "—",
-        product_id: o.order_items?.[0]?.product?.id || null,
+        productName: firstItem?.product?.name || "Producto no encontrado",
+        product_id: firstItem?.product?.id || null,
         book_downloaded: o.downloaded,
         invoice_downloaded: o.invoice_downloaded,
         invoice_url: o.invoice_url,
-      }))
-    );
+      };
+    });
+
+    console.log("📋 Recent orders processed:", recentOrdersData);
+    setRecentOrders(recentOrdersData);
   }, [user]);
 
   // 3) Ejecuta cuando `user` esté listo
@@ -161,7 +176,7 @@ export default function ProfileDashboard() {
       <main className="flex-1 p-6 overflow-auto bg-gray-100 sm:ml-64">
         {tab === "summary" && (
           <div className="space-y-6 mt-24">
-            {/* … Cards … */}
+            {/* Cards de métricas */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <Card label="Pedidos totales" value={totalOrders} />
               <Card label="Total gastado (€)" value={totalSpent.toFixed(2)} />
@@ -172,53 +187,64 @@ export default function ProfileDashboard() {
                 value={pendingInvoiceDownloads}
               />
             </div>
-            {/* … Gráfico y tabla de últimos pedidos … */}
+
+            {/* Tabla de últimos pedidos */}
             <div className="bg-white p-4 rounded shadow">
               <h4 className="font-semibold mb-2">Últimos pedidos</h4>
-              <table className="w-full text-left">
-                <thead>
-                  <tr className="border-b">
-                    <th>Fecha</th>
-                    <th>Producto</th>
-                    <th>Descarga</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {recentOrders.map((o) => (
-                    <tr key={o.id} className="border-b">
-                      <td>
-                        {new Date(o.created_at).toLocaleDateString("es-ES")}
-                      </td>
-                      <td>{o.productName}</td>
-                      <td className="flex space-x-4">
-                        {!o.book_downloaded && (
-                          <BookDownloadButton
-                            orderId={o.id}
-                            productId={o.product_id}
-                            onDownloaded={refreshMetrics}
-                          />
-                        )}
-                        {o.invoice_url && !o.invoice_downloaded && (
-                          <InvoiceDownloadButton
-                            orderId={o.id}
-                            url={o.invoice_url}
-                            onDownloaded={refreshMetrics}
-                          />
-                        )}
-                      </td>
+              {recentOrders.length > 0 ? (
+                <table className="w-full text-left">
+                  <thead>
+                    <tr className="border-b">
+                      <th className="py-2">Fecha</th>
+                      <th className="py-2">Producto</th>
+                      <th className="py-2">Acciones</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {recentOrders.map((o) => (
+                      <tr key={o.id} className="border-b">
+                        <td className="py-2">
+                          {new Date(o.created_at).toLocaleDateString("es-ES")}
+                        </td>
+                        <td className="py-2">{o.productName}</td>
+                        <td className="py-2">
+                          <div className="flex space-x-2">
+                            {!o.book_downloaded && o.product_id && (
+                              <BookDownloadButton
+                                orderId={o.id}
+                                productId={o.product_id}
+                                onDownloaded={refreshMetrics}
+                              />
+                            )}
+                            {o.invoice_url && !o.invoice_downloaded && (
+                              <InvoiceDownloadButton
+                                orderId={o.id}
+                                url={o.invoice_url}
+                                onDownloaded={refreshMetrics}
+                              />
+                            )}
+                            {!o.product_id && (
+                              <span className="text-sm text-gray-500">
+                                Producto no disponible
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <p className="text-center text-gray-500 py-4">
+                  No tienes pedidos recientes
+                </p>
+              )}
             </div>
           </div>
         )}
 
         {tab === "orders" && (
-          <UserOrders
-            userId={user.id}
-            onDownloaded={refreshMetrics} // aquí el callback para refrescar métricas
-          />
+          <UserOrders userId={user.id} onDownloaded={refreshMetrics} />
         )}
         {tab === "invoice" && <UserDownloads userId={user.id} />}
         {tab === "support" && <SupportForm client:load />}
@@ -233,15 +259,6 @@ function Card({ label, value }) {
     <div className="bg-white p-4 rounded shadow text-center">
       <p className="text-sm text-gray-600">{label}</p>
       <p className="mt-1 text-2xl font-bold">{value}</p>
-    </div>
-  );
-}
-
-function MetricCard({ title, value }) {
-  return (
-    <div className="bg-white p-4 rounded shadow">
-      <p className="text-sm text-gray-600">{title}</p>
-      <p className="mt-1 font-medium">{value}</p>
     </div>
   );
 }
