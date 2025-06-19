@@ -1,4 +1,3 @@
-// src/pages/api/create-checkout-session.ts
 import type { APIRoute } from "astro";
 import { Stripe } from "stripe";
 import { supabaseAdmin } from "../../lib/supabaseAdminClient";
@@ -22,7 +21,6 @@ export const POST: APIRoute = async ({ request }) => {
       );
     }
 
-    // 1. Obtener email del cliente desde profiles
     const { data: profile, error: profileError } = await supabaseAdmin
       .from("profiles")
       .select("email")
@@ -32,14 +30,11 @@ export const POST: APIRoute = async ({ request }) => {
     if (profileError || !profile?.email) {
       console.error("❌ Error obteniendo email del perfil:", profileError);
       return new Response(
-        JSON.stringify({
-          error: "No se pudo obtener el email del cliente",
-        }),
+        JSON.stringify({ error: "No se pudo obtener el email del cliente" }),
         { status: 400 }
       );
     }
 
-    // 2. Prepara line_items para Stripe
     const line_items = items.map((item) => ({
       price_data: {
         currency: "eur",
@@ -49,7 +44,6 @@ export const POST: APIRoute = async ({ request }) => {
       quantity: item.quantity,
     }));
 
-    // 3. Crea la sesión en Stripe
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ["card"],
       line_items,
@@ -60,29 +54,25 @@ export const POST: APIRoute = async ({ request }) => {
       cancel_url: `${import.meta.env.PUBLIC_SITE_URL}/cart`,
     });
 
-    // 4. Calcula total
     const amount_total = items.reduce(
       (sum, i) => sum + i.price * i.quantity,
       0
     );
 
-    // Justo antes de insertar en Supabase, añade este log:
-    console.log("🟡 Insertando orden:", {
-      customer_id: customerId,
-      checkout_session_id: session.id,
-      product_id: items[0].id,
-      amount_total,
-    });
-
-    // 5. Inserta el pedido en Supabase
     const orderId = uuidv4();
     const { error: orderError } = await supabaseAdmin.from("orders").insert([
       {
         id: orderId,
         customer_id: customerId,
-        checkout_session_id: session.id,
-        product_id: items[0].id,
+        customer_email: profile.email,
+        name: items.map((i) => i.name).join(", "),
         amount_total,
+        status: "pending",
+        downloaded: false,
+        invoice_downloaded: false,
+        product_id: items.length === 1 ? items[0].id : null, // solo si es 1
+        checkout_session_id: session.id,
+        created_at: new Date().toISOString(),
       },
     ]);
 
@@ -96,10 +86,9 @@ export const POST: APIRoute = async ({ request }) => {
       );
     }
 
-    // 6. Inserta order_items por cada item
     const orderItems = items.map((item) => ({
-      order_id: orderId, // usa el mismo UUID que usaste para orders
-      product_id: item.id,
+      order_id: orderId,
+      product_id: item.id, // Asegúrate que este `id` exista en `products`
       quantity: item.quantity,
       unit_price: item.price,
     }));
@@ -112,7 +101,7 @@ export const POST: APIRoute = async ({ request }) => {
       console.error("❌ Error insertando order_items:", orderItemsError);
       return new Response(
         JSON.stringify({
-          error: `No se pudo guardar los items del pedido: ${orderItemsError?.message ?? "Error desconocido"}`,
+          error: `No se pudo guardar los items del pedido: ${orderItemsError.message}`,
         }),
         { status: 500 }
       );
