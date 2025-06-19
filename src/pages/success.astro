@@ -15,291 +15,85 @@ const stripe = new Stripe(import.meta.env.STRIPE_SECRET_KEY, {
 
 const sessionId = Astro.url.searchParams.get("session_id");
 
-// Validación básica del session_id
+// Validación inicial
 if (!sessionId) {
-  console.log("❌ No session_id provided, redirecting to home");
-  return Astro.redirect("/");
+  return Astro.redirect("/error?message=session_not_found");
 }
 
-// Validar formato del session_id (debe empezar con cs_)
-if (!sessionId.startsWith("cs_")) {
-  console.log("❌ Invalid session_id format:", sessionId);
-  return Astro.redirect("/?error=invalid_session");
-}
-
-console.log("🔍 Procesando session_id:", sessionId);
-
-// Variables para el debug
+// 1) Recupera la sesión de Stripe
 let session = null;
 let stripeError = null;
-let dbOrder = null;
-let dbError = null;
 
-// 1) Intentar recuperar la sesión de Stripe
 try {
   session = await stripe.checkout.sessions.retrieve(sessionId, {
-    expand: ["line_items.data.price.product", "customer"],
+    expand: ["line_items.data.price.product"],
   });
-  console.log("✅ Sesión de Stripe recuperada:", session.id);
-  console.log("📊 Payment status:", session.payment_status);
 } catch (err) {
-  console.error("❌ Error fetching Stripe session:", err);
+  console.error("Error fetching Stripe session:", err);
   stripeError = err;
-
-  // Si es un error 404, el session no existe
-  if (err.code === "resource_missing") {
-    console.log("🔍 Session no encontrado en Stripe, verificando en BD...");
-  }
 }
 
-// 2) Si no hay sesión en Stripe, intentar buscar por session_id en BD
-if (!session) {
-  const { data: orderBySession, error: sessionError } = await supabaseAdmin
-    .from("orders")
-    .select(
-      `
-      id, 
-      amount_total, 
-      invoice_url, 
-      checkout_session_id,
-      created_at,
-      user_id,
-      status,
-      profiles!inner(email, full_name)
-    `
-    )
-    .eq("checkout_session_id", sessionId)
-    .maybeSingle();
+console.log("📦 Buscando orden con session_id:", sessionId);
 
-  if (sessionError) {
-    console.error("❌ Error buscando orden por session:", sessionError);
-    dbError = sessionError;
-  } else if (orderBySession) {
-    console.log(
-      "✅ Orden encontrada en BD sin sesión de Stripe:",
-      orderBySession.id
-    );
-    dbOrder = orderBySession;
-  } else {
-    console.log("❌ No se encontró orden con este session_id en BD");
-  }
+// 2) Con el cliente ADMIN ignoramos RLS
+const { data: dbOrder, error: dbError } = await supabaseAdmin
+  .from("orders")
+  .select("id, amount_total, invoice_url, checkout_session_id, created_at")
+  .eq("checkout_session_id", sessionId)
+  .maybeSingle();
+
+if (dbError) {
+  console.error("❌ Error fetch success page:", dbError);
+} else if (!dbOrder) {
+  console.warn("⚠️ Pedido no encontrado con session_id:", sessionId);
+} else {
+  console.log("✅ Pedido encontrado:", dbOrder);
 }
 
-// 3) Si hay sesión, buscar el pedido correspondiente en BD
-if (session) {
-  const { data: order, error } = await supabaseAdmin
-    .from("orders")
-    .select(
-      `
-      id, 
-      amount_total, 
-      invoice_url, 
-      checkout_session_id,
-      created_at,
-      user_id,
-      status,
-      profiles!inner(email, full_name)
-    `
-    )
-    .eq("checkout_session_id", sessionId)
-    .maybeSingle();
-
-  dbOrder = order;
-  dbError = error;
-
-  if (error) {
-    console.error("❌ Error buscando orden:", error);
-  } else if (order) {
-    console.log("✅ Orden encontrada en BD:", order.id);
-  } else {
-    console.log("⚠️ Sesión existe en Stripe pero no hay orden en BD");
-
-    // Crear orden automáticamente si el pago está completo
-    if (session.payment_status === "paid") {
-      console.log("💡 Creando orden automáticamente...");
-
-      try {
-        // Obtener información del usuario desde la sesión o metadata
-        const userId = session.metadata?.user_id || null;
-
-        // Crear la orden
-        const { data: newOrder, error: createError } = await supabaseAdmin
-          .from("orders")
-          .insert({
-            checkout_session_id: sessionId,
-            amount_total: session.amount_total / 100, // Stripe usa centavos
-            user_id: userId,
-            stripe_payment_intent_id: session.payment_intent,
-            status: "completed",
-          })
-          .select(
-            `
-            id, 
-            amount_total, 
-            invoice_url, 
-            checkout_session_id,
-            created_at,
-            user_id,
-            status
-          `
-          )
-          .single();
-
-        if (createError) {
-          console.error("❌ Error creando orden automática:", createError);
-        } else {
-          console.log("✅ Orden creada automáticamente:", newOrder.id);
-
-          // Buscar el perfil del usuario para completar la información
-          if (userId) {
-            const { data: profile } = await supabaseAdmin
-              .from("profiles")
-              .select("email, full_name")
-              .eq("id", userId)
-              .single();
-
-            if (profile) {
-              newOrder.profiles = profile;
-            }
-          }
-
-          dbOrder = newOrder;
-
-          // Crear los items de la orden basados en line_items de Stripe
-          if (session.line_items?.data) {
-            const orderItems = session.line_items.data.map((lineItem) => {
-              const product = lineItem.price.product;
-              return {
-                order_id: newOrder.id,
-                product_id: product.metadata?.product_id || null, // Si tienes el ID en metadata
-                quantity: lineItem.quantity,
-                price: lineItem.price.unit_amount / 100,
-                product_name: product.name,
-                product_description: product.description,
-              };
-            });
-
-            // Insertar items de la orden
-            const { error: itemsError } = await supabaseAdmin
-              .from("order_items")
-              .insert(orderItems);
-
-            if (itemsError) {
-              console.error("⚠️ Error creando items de orden:", itemsError);
-            } else {
-              console.log("✅ Items de orden creados");
-            }
-          }
-        }
-      } catch (createOrderError) {
-        console.error(
-          "❌ Error en creación automática de orden:",
-          createOrderError
-        );
-      }
-    }
-  }
-}
-
-// 4) Construir información para mostrar
+// 3) Construye el nombre del producto
+let productName = "";
 let productDetails = [];
-let totalItems = 0;
-let totalAmount = 0;
 
-// Si hay sesión de Stripe, usar esos datos
 if (session?.line_items?.data) {
   productDetails = session.line_items.data.map((li) => {
     const prod = (li.price as any).product as Stripe.Product;
-    totalItems += li.quantity || 1;
     return {
       name: prod?.name ?? li.description ?? "Artículo",
-      quantity: li.quantity || 1,
-      amount: li.amount_total,
-      price: (li.price as any)?.unit_amount,
+      quantity: li.quantity ?? 1,
+      amount: li.amount_total ?? 0,
     };
   });
-  totalAmount = session.amount_total / 100;
-} else if (dbOrder) {
-  // Si no hay sesión pero sí orden en BD, usar esos datos
-  totalAmount = dbOrder.amount_total;
-  productDetails = [
-    {
-      name: "Producto adquirido",
-      quantity: 1,
-      amount: dbOrder.amount_total * 100, // BD guarda en euros, Stripe en centavos
-      price: dbOrder.amount_total * 100,
-    },
-  ];
-  totalItems = 1;
+
+  productName = productDetails
+    .map((item) => `${item.name} (x${item.quantity})`)
+    .join(", ");
 }
 
-// 5) Información del cliente y pedido
-const customerEmail =
-  session?.customer_details?.email ||
-  session?.customer?.email ||
-  dbOrder?.profiles?.email;
-const customerName =
-  session?.customer_details?.name || dbOrder?.profiles?.full_name;
-const orderDate = dbOrder?.created_at
-  ? new Date(dbOrder.created_at)
-  : session
-    ? new Date(session.created * 1000)
-    : new Date();
-const orderId = dbOrder?.id?.substring(0, 8) || sessionId.substring(0, 8);
-const paymentStatus =
-  session?.payment_status ||
-  (dbOrder?.status === "completed" ? "paid" : "unknown");
-
-// Debug info
-const isDev = import.meta.env.DEV;
-const debugInfo = {
-  sessionId,
-  hasSession: !!session,
-  hasDbOrder: !!dbOrder,
-  paymentStatus,
-  sessionCreated: session
-    ? new Date(session.created * 1000).toISOString()
-    : null,
-  dbOrderId: dbOrder?.id,
-  dbOrderStatus: dbOrder?.status,
-  stripeError: stripeError?.message,
-  dbError: dbError?.message,
-  totalAmount,
-  productCount: productDetails.length,
+// Formatear fecha
+const formatDate = (dateString: string) => {
+  return new Date(dateString).toLocaleDateString("es-ES", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 };
-
-// 6) Determinar si mostrar éxito o error
-const showSuccess = session || dbOrder;
-const hasPaymentData = totalAmount > 0 && productDetails.length > 0;
 ---
 
-<BaseLayout
-  title={showSuccess ? "¡Compra Exitosa!" : "Error en el Procesamiento"}
->
-  {/* Debug info en desarrollo */}
-  {
-    isDev && (
-      <div class="fixed top-4 right-4 bg-yellow-100 border border-yellow-400 text-yellow-800 p-4 rounded-lg text-xs max-w-sm z-50 max-h-96 overflow-auto">
-        <strong>Debug Info:</strong>
-        <pre class="mt-2 whitespace-pre-wrap text-xs">
-          {JSON.stringify(debugInfo, null, 2)}
-        </pre>
-      </div>
-    )
-  }
-
+<BaseLayout title="Gracias por tu compra">
   <div
-    class="min-h-screen bg-gradient-to-br from-green-50 via-blue-50 to-purple-50 py-12 px-4 sm:px-6 lg:px-8"
+    class="min-h-screen bg-gradient-to-br from-green-50 to-blue-50 py-12 px-4"
   >
-    <div class="max-w-4xl mx-auto">
+    <div class="max-w-2xl mx-auto">
       {
-        showSuccess && hasPaymentData ? (
-          <div class="space-y-8">
+        session && !stripeError ? (
+          <div class="bg-white rounded-2xl shadow-2xl overflow-hidden">
             {/* Header de éxito */}
-            <div class="text-center">
-              <div class="mx-auto flex items-center justify-center h-20 w-20 rounded-full bg-green-100 mb-6">
+            <div class="bg-gradient-to-r from-green-500 to-green-600 px-8 py-12 text-center">
+              <div class="w-20 h-20 bg-white rounded-full flex items-center justify-center mx-auto mb-6">
                 <svg
-                  class="h-10 w-10 text-green-600"
+                  class="w-10 h-10 text-green-500"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -307,225 +101,94 @@ const hasPaymentData = totalAmount > 0 && productDetails.length > 0;
                   <path
                     stroke-linecap="round"
                     stroke-linejoin="round"
-                    stroke-width="2"
+                    stroke-width="3"
                     d="M5 13l4 4L19 7"
                   />
                 </svg>
               </div>
-              <h1 class="text-4xl font-bold text-gray-900 mb-2">
-                {paymentStatus === "paid"
-                  ? "¡Pago Completado!"
-                  : "¡Pedido Procesado!"}
+              <h1 class="text-3xl font-bold text-white mb-2">
+                ¡Pago Completado!
               </h1>
-              <p class="text-xl text-gray-600 mb-4">
-                Gracias por tu compra, {customerName || "cliente"}
+              <p class="text-green-100 text-lg">
+                Tu compra se ha procesado exitosamente
               </p>
-              <div class="inline-flex items-center px-4 py-2 bg-green-100 text-green-800 rounded-full text-sm font-medium">
-                <svg
-                  class="w-4 h-4 mr-2"
-                  fill="currentColor"
-                  viewBox="0 0 20 20"
-                >
-                  <path
-                    fill-rule="evenodd"
-                    d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
-                    clip-rule="evenodd"
-                  />
-                </svg>
-                {session ? "Pago procesado" : "Pedido confirmado"} - ID: #
-                {orderId}
-              </div>
-
-              {paymentStatus === "pending" && (
-                <div class="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-                  <p class="text-yellow-800 text-sm">
-                    <strong>Estado del pago:</strong> Pendiente - El pago está
-                    siendo procesado
-                  </p>
-                </div>
-              )}
-
-              {!session && dbOrder && (
-                <div class="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                  <p class="text-blue-800 text-sm">
-                    <strong>Información recuperada:</strong> Datos obtenidos de
-                    nuestro sistema
-                  </p>
-                </div>
-              )}
             </div>
 
-            {/* Detalles del pedido */}
-            <div class="bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden">
-              <div class="bg-gradient-to-r from-blue-600 to-purple-600 px-6 py-4">
-                <h2 class="text-xl font-bold text-white">Resumen del Pedido</h2>
-              </div>
+            {/* Contenido principal */}
+            <div class="px-8 py-8 space-y-8">
+              {/* Detalles del pedido */}
+              <div class="border-l-4 border-green-500 pl-6">
+                <h2 class="text-xl font-semibold text-gray-800 mb-4">
+                  Detalles de tu compra
+                </h2>
 
-              <div class="p-6">
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                  {/* Información del cliente */}
-                  <div>
-                    <h3 class="text-lg font-semibold text-gray-900 mb-3">
-                      Información del Cliente
-                    </h3>
-                    <div class="space-y-2 text-sm">
-                      <div class="flex items-center">
-                        <svg
-                          class="w-4 h-4 mr-2 text-gray-400"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            stroke-width="2"
-                            d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
-                          />
-                        </svg>
-                        <span class="text-gray-600">Nombre:</span>
-                        <span class="ml-2 font-medium">
-                          {customerName || "No especificado"}
-                        </span>
+                {/* Productos */}
+                <div class="space-y-3 mb-6">
+                  {productDetails.map((item, index) => (
+                    <div
+                      key={index}
+                      class="flex justify-between items-center py-3 border-b border-gray-100 last:border-b-0"
+                    >
+                      <div>
+                        <p class="font-medium text-gray-800">{item.name}</p>
+                        <p class="text-sm text-gray-500">
+                          Cantidad: {item.quantity}
+                        </p>
                       </div>
-                      <div class="flex items-center">
-                        <svg
-                          class="w-4 h-4 mr-2 text-gray-400"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            stroke-width="2"
-                            d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
-                          />
-                        </svg>
-                        <span class="text-gray-600">Email:</span>
-                        <span class="ml-2 font-medium">
-                          {customerEmail || "No especificado"}
-                        </span>
-                      </div>
+                      <p class="font-semibold text-gray-800">
+                        €{(item.amount / 100).toFixed(2)}
+                      </p>
                     </div>
-                  </div>
-
-                  {/* Información del pedido */}
-                  <div>
-                    <h3 class="text-lg font-semibold text-gray-900 mb-3">
-                      Detalles del Pedido
-                    </h3>
-                    <div class="space-y-2 text-sm">
-                      <div class="flex items-center">
-                        <svg
-                          class="w-4 h-4 mr-2 text-gray-400"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            stroke-width="2"
-                            d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"
-                          />
-                        </svg>
-                        <span class="text-gray-600">ID de Transacción:</span>
-                        <span class="ml-2 font-medium">#{orderId}</span>
-                      </div>
-                      <div class="flex items-center">
-                        <svg
-                          class="w-4 h-4 mr-2 text-gray-400"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            stroke-width="2"
-                            d="M8 7V3a4 4 0 118 0v4m-4 12v-8m-6 8h12a2 2 0 002-2V9a2 2 0 00-2-2H6a2 2 0 00-2 2v10a2 2 0 002 2z"
-                          />
-                        </svg>
-                        <span class="text-gray-600">Fecha:</span>
-                        <span class="ml-2 font-medium">
-                          {orderDate.toLocaleDateString("es-ES", {
-                            year: "numeric",
-                            month: "long",
-                            day: "numeric",
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
-                        </span>
-                      </div>
-                      <div class="flex items-center">
-                        <svg
-                          class="w-4 h-4 mr-2 text-gray-400"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            stroke-width="2"
-                            d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1"
-                          />
-                        </svg>
-                        <span class="text-gray-600">Total:</span>
-                        <span class="ml-2 font-bold text-lg text-green-600">
-                          €{totalAmount.toFixed(2)}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
+                  ))}
                 </div>
 
-                {/* Productos comprados */}
-                <div class="border-t pt-6">
-                  <h3 class="text-lg font-semibold text-gray-900 mb-4">
-                    Productos Adquiridos ({totalItems} artículo
-                    {totalItems !== 1 ? "s" : ""})
-                  </h3>
-                  <div class="space-y-4">
-                    {productDetails.map((item, index) => (
-                      <div class="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                        <div class="flex-1">
-                          <h4 class="font-medium text-gray-900">{item.name}</h4>
-                          {item.quantity > 1 && (
-                            <p class="text-sm text-gray-600">
-                              Cantidad: {item.quantity}
-                            </p>
-                          )}
-                        </div>
-                        <div class="text-right">
-                          <p class="font-semibold text-gray-900">
-                            €
-                            {item.amount
-                              ? (item.amount / 100).toFixed(2)
-                              : totalAmount.toFixed(2)}
-                          </p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                {/* Total */}
+                <div class="bg-gray-50 rounded-lg p-4 flex justify-between items-center">
+                  <span class="text-lg font-semibold text-gray-800">
+                    Total pagado:
+                  </span>
+                  <span class="text-2xl font-bold text-green-600">
+                    €
+                    {session.amount_total != null
+                      ? (session.amount_total / 100).toFixed(2)
+                      : "N/A"}
+                  </span>
                 </div>
-              </div>
-            </div>
 
-            {/* Acciones principales */}
-            <div class="bg-white rounded-2xl shadow-lg border border-gray-200 p-6">
-              <h3 class="text-lg font-semibold text-gray-900 mb-4">
-                Acciones Disponibles
-              </h3>
-              <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {/* Factura */}
-                <div class="text-center">
-                  {dbOrder?.invoice_url ? (
+                {/* Fecha */}
+                {dbOrder?.created_at && (
+                  <div class="mt-4 text-sm text-gray-500">
+                    <p>Fecha de compra: {formatDate(dbOrder.created_at)}</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Sección de factura */}
+              <div class="bg-blue-50 rounded-xl p-6">
+                <h3 class="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+                  <svg
+                    class="w-5 h-5 mr-2 text-blue-600"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                    />
+                  </svg>
+                  Factura
+                </h3>
+
+                {dbOrder ? (
+                  dbOrder.invoice_url ? (
                     <a
                       href={dbOrder.invoice_url}
                       target="_blank"
-                      class="inline-flex items-center px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium w-full justify-center"
+                      rel="noopener noreferrer"
+                      class="inline-flex items-center px-6 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors duration-200 shadow-md hover:shadow-lg"
                     >
                       <svg
                         class="w-5 h-5 mr-2"
@@ -542,183 +205,103 @@ const hasPaymentData = totalAmount > 0 && productDetails.length > 0;
                       </svg>
                       Descargar Factura
                     </a>
-                  ) : dbOrder ? (
-                    <div class="space-y-2">
-                      <InvoiceButton client:load orderId={dbOrder.id} />
-                      <p class="text-xs text-gray-500">
-                        Factura lista para generar
-                      </p>
-                    </div>
                   ) : (
-                    <div class="space-y-2">
-                      <button
-                        disabled
-                        class="inline-flex items-center px-6 py-3 bg-gray-300 text-gray-500 rounded-lg cursor-not-allowed font-medium w-full justify-center"
+                    <div class="space-y-3">
+                      <p class="text-gray-600 mb-3">
+                        Tu factura se está generando...
+                      </p>
+                      <InvoiceButton client:load orderId={dbOrder.id} />
+                    </div>
+                  )
+                ) : (
+                  <div class="bg-red-50 border border-red-200 rounded-lg p-4">
+                    <div class="flex items-center">
+                      <svg
+                        class="w-5 h-5 text-red-500 mr-2"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
                       >
-                        <svg
-                          class="w-5 h-5 mr-2"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            stroke-width="2"
-                            d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                          />
-                        </svg>
-                        Procesando...
-                      </button>
-                      <p class="text-xs text-gray-500">
-                        Disponible en unos minutos
+                        <path
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          stroke-width="2"
+                          d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"
+                        />
+                      </svg>
+                      <p class="text-red-700 font-medium">
+                        No pudimos encontrar tu pedido en la base de datos.
                       </p>
                     </div>
-                  )}
-                </div>
-
-                {/* Dashboard */}
-                <div class="text-center">
-                  <a
-                    href="/dashboard"
-                    class="inline-flex items-center px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium w-full justify-center"
-                  >
-                    <svg
-                      class="w-5 h-5 mr-2"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        stroke-width="2"
-                        d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2-2z"
-                      />
-                      <path
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        stroke-width="2"
-                        d="M8 5a2 2 0 012-2h4a2 2 0 012 2v2H8V5z"
-                      />
-                    </svg>
-                    Mi Dashboard
-                  </a>
-                </div>
-
-                {/* Soporte */}
-                <div class="text-center">
-                  <a
-                    href="/support"
-                    class="inline-flex items-center px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium w-full justify-center"
-                  >
-                    <svg
-                      class="w-5 h-5 mr-2"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        stroke-width="2"
-                        d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
-                      />
-                    </svg>
-                    Contactar Soporte
-                  </a>
-                </div>
+                    <p class="text-red-600 text-sm mt-2">
+                      Por favor, contacta con soporte si necesitas tu factura.
+                    </p>
+                  </div>
+                )}
               </div>
-            </div>
 
-            {/* CTA para seguir comprando */}
-            <div class="text-center">
-              <a
-                href="/"
-                class="inline-flex items-center px-8 py-3 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors font-medium"
-              >
-                <svg
-                  class="w-5 h-5 mr-2"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M7 16l-4-4m0 0l4-4m-4 4h18"
-                  />
-                </svg>
-                Seguir Explorando
-              </a>
-            </div>
-          </div>
-        ) : (
-          /* Estado de error */
-          <div class="text-center">
-            <div class="mx-auto flex items-center justify-center h-20 w-20 rounded-full bg-red-100 mb-6">
-              <svg
-                class="h-10 w-10 text-red-600"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                />
-              </svg>
-            </div>
-            <h1 class="text-3xl font-bold text-gray-900 mb-4">
-              Session ID No Válido
-            </h1>
-            <p class="text-gray-600 mb-6">
-              La sesión de pago no pudo ser encontrada en nuestro sistema.
-            </p>
-            <div class="bg-gray-50 border border-gray-200 rounded-lg p-6 mb-6">
-              <h3 class="font-semibold text-gray-900 mb-2">
-                Esto puede suceder porque:
-              </h3>
-              <ul class="text-sm text-gray-600 space-y-1 text-left">
-                <li>• El enlace de confirmación es incorrecto o ha expirado</li>
-                <li>• Hubo un problema durante el proceso de pago</li>
-                <li>• El pago fue cancelado antes de completarse</li>
-                <li>• La sesión fue utilizada en modo de prueba</li>
-              </ul>
-            </div>
-            <div class="space-y-4">
-              <p class="text-sm text-gray-500">
-                Session ID para soporte:{" "}
-                <code class="bg-gray-100 px-2 py-1 rounded font-mono text-xs">
-                  {sessionId}
-                </code>
-              </p>
-              <div class="flex flex-col sm:flex-row gap-4 justify-center">
-                <a
-                  href="/support"
-                  class="inline-flex items-center px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                >
-                  <svg
-                    class="w-5 h-5 mr-2"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="2"
-                      d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
-                    />
-                  </svg>
-                  Contactar Soporte
-                </a>
+              {/* Información adicional */}
+              <div class="bg-gray-50 rounded-xl p-6">
+                <h3 class="text-lg font-semibold text-gray-800 mb-3">
+                  ¿Qué sigue?
+                </h3>
+                <ul class="space-y-2 text-gray-600">
+                  <li class="flex items-start">
+                    <svg
+                      class="w-5 h-5 text-green-500 mr-2 mt-0.5 flex-shrink-0"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M5 13l4 4L19 7"
+                      />
+                    </svg>
+                    Recibirás un email de confirmación en los próximos minutos
+                  </li>
+                  <li class="flex items-start">
+                    <svg
+                      class="w-5 h-5 text-green-500 mr-2 mt-0.5 flex-shrink-0"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M5 13l4 4L19 7"
+                      />
+                    </svg>
+                    Tu factura estará disponible para descarga una vez procesada
+                  </li>
+                  <li class="flex items-start">
+                    <svg
+                      class="w-5 h-5 text-green-500 mr-2 mt-0.5 flex-shrink-0"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M5 13l4 4L19 7"
+                      />
+                    </svg>
+                    Si tienes alguna duda, no dudes en contactarnos
+                  </li>
+                </ul>
+              </div>
+
+              {/* Botones de acción */}
+              <div class="flex flex-col sm:flex-row gap-4 pt-6">
                 <a
                   href="/"
-                  class="inline-flex items-center px-6 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+                  class="flex-1 inline-flex items-center justify-center px-6 py-3 bg-gray-600 text-white font-medium rounded-lg hover:bg-gray-700 transition-colors duration-200"
                 >
                   <svg
                     class="w-5 h-5 mr-2"
@@ -733,11 +316,11 @@ const hasPaymentData = totalAmount > 0 && productDetails.length > 0;
                       d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"
                     />
                   </svg>
-                  Volver al Inicio
+                  Volver al inicio
                 </a>
                 <a
-                  href="/dashboard"
-                  class="inline-flex items-center px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+                  href="/tienda"
+                  class="flex-1 inline-flex items-center justify-center px-6 py-3 bg-indigo-600 text-white font-medium rounded-lg hover:bg-indigo-700 transition-colors duration-200"
                 >
                   <svg
                     class="w-5 h-5 mr-2"
@@ -749,11 +332,64 @@ const hasPaymentData = totalAmount > 0 && productDetails.length > 0;
                       stroke-linecap="round"
                       stroke-linejoin="round"
                       stroke-width="2"
-                      d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+                      d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"
                     />
                   </svg>
-                  Mi Cuenta
+                  Seguir comprando
                 </a>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div class="bg-white rounded-2xl shadow-2xl overflow-hidden">
+            {/* Header de error */}
+            <div class="bg-gradient-to-r from-red-500 to-red-600 px-8 py-12 text-center">
+              <div class="w-20 h-20 bg-white rounded-full flex items-center justify-center mx-auto mb-6">
+                <svg
+                  class="w-10 h-10 text-red-500"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="3"
+                    d="M6 18L18 6M6 6l12 12"
+                  />
+                </svg>
+              </div>
+              <h1 class="text-3xl font-bold text-white mb-2">
+                Error al procesar
+              </h1>
+              <p class="text-red-100 text-lg">
+                No se pudo recuperar la información del pago
+              </p>
+            </div>
+
+            <div class="px-8 py-8">
+              <div class="bg-red-50 border border-red-200 rounded-lg p-6 text-center">
+                <p class="text-red-700 mb-4">
+                  Lo sentimos, no pudimos encontrar los detalles de tu
+                  transacción.
+                </p>
+                <div class="space-y-4">
+                  <p class="text-sm text-red-600">Esto puede deberse a:</p>
+                  <ul class="text-sm text-red-600 space-y-1">
+                    <li>• La sesión de pago ha expirado</li>
+                    <li>• El enlace no es válido</li>
+                    <li>• Error temporal del servidor</li>
+                  </ul>
+                </div>
+
+                <div class="mt-6">
+                  <a
+                    href="/contacto"
+                    class="inline-flex items-center px-6 py-3 bg-red-600 text-white font-medium rounded-lg hover:bg-red-700 transition-colors duration-200"
+                  >
+                    Contactar soporte
+                  </a>
+                </div>
               </div>
             </div>
           </div>
@@ -762,3 +398,35 @@ const hasPaymentData = totalAmount > 0 && productDetails.length > 0;
     </div>
   </div>
 </BaseLayout>
+
+<style>
+  /* Animaciones adicionales */
+  @keyframes fadeInUp {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .bg-white {
+    animation: fadeInUp 0.6s ease-out;
+  }
+
+  /* Mejoras de accesibilidad */
+  @media (prefers-reduced-motion: reduce) {
+    .bg-white {
+      animation: none;
+    }
+  }
+
+  /* Responsive adjustments */
+  @media (max-width: 640px) {
+    .max-w-2xl {
+      margin: 0 1rem;
+    }
+  }
+</style>
