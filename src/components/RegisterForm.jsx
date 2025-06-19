@@ -22,7 +22,7 @@ export default function RegisterForm() {
         email: form.email,
         password: form.password,
         options: {
-          data: { full_name: form.name }, // Guarda también el nombre en metadata
+          data: { full_name: form.name },
         },
       }
     );
@@ -33,10 +33,24 @@ export default function RegisterForm() {
       return;
     }
 
-    // ⚠️ Si tienes activado "email confirmation", `signUpData.user` será null
     const user = signUpData.user;
     if (!user) {
       setError("Revisa tu email para confirmar la cuenta.");
+      setLoading(false);
+      return;
+    }
+
+    // 2) Guardar perfil en tabla 'profiles'
+    const { error: profileError } = await supabase.from("profiles").insert([
+      {
+        id: user.id,
+        full_name: form.name,
+        email: user.email, // ← asegúrate de que este campo exista en la tabla
+      },
+    ]);
+
+    if (profileError) {
+      setError("Error al guardar perfil: " + profileError.message);
       setLoading(false);
       return;
     }
