@@ -1,4 +1,4 @@
-// src/components/ProfileDashboard.jsx
+// src/components/ProfileDashboard.jsx - Debug version
 import React, { useState, useEffect, useCallback } from "react";
 import { supabase } from "../lib/supabaseClient";
 import SettingsForm from "./SettingsForm.jsx";
@@ -117,6 +117,9 @@ export default function ProfileDashboard() {
         orderItems: o.order_items,
         finalProductName: productName,
         finalProductId: productId,
+        downloaded: o.downloaded,
+        invoice_url: o.invoice_url,
+        invoice_downloaded: o.invoice_downloaded,
       });
 
       return {
@@ -253,28 +256,44 @@ export default function ProfileDashboard() {
                         </td>
                         <td className="py-2">
                           <div className="flex space-x-2">
+                            {/* Debug información */}
+                            <div className="text-xs text-gray-500 mb-1">
+                              Debug: downloaded={String(o.book_downloaded)},
+                              has_product_id={String(!!o.product_id)}
+                            </div>
+
+                            {/* Botón descarga libro */}
                             {!o.book_downloaded && o.product_id ? (
                               <BookDownloadButton
                                 orderId={o.id}
                                 productId={o.product_id}
                                 onDownloaded={refreshMetrics}
                               />
-                            ) : !o.book_downloaded && !o.product_id ? (
-                              <span className="text-sm text-orange-500 px-2 py-1 bg-orange-50 rounded">
-                                Producto no vinculado
-                              </span>
-                            ) : (
+                            ) : o.book_downloaded ? (
                               <span className="text-sm text-green-500 px-2 py-1 bg-green-50 rounded">
                                 ✓ Descargado
                               </span>
+                            ) : (
+                              <span className="text-sm text-orange-500 px-2 py-1 bg-orange-50 rounded">
+                                Producto no vinculado
+                              </span>
                             )}
 
-                            {o.invoice_url && !o.invoice_downloaded && (
+                            {/* Botón descarga factura */}
+                            {o.invoice_url && !o.invoice_downloaded ? (
                               <InvoiceDownloadButton
                                 orderId={o.id}
                                 url={o.invoice_url}
                                 onDownloaded={refreshMetrics}
                               />
+                            ) : o.invoice_url && o.invoice_downloaded ? (
+                              <span className="text-sm text-blue-500 px-2 py-1 bg-blue-50 rounded">
+                                ✓ Factura descargada
+                              </span>
+                            ) : (
+                              <span className="text-xs text-gray-400">
+                                Sin factura
+                              </span>
                             )}
                           </div>
                         </td>
