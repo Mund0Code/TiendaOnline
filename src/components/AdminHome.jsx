@@ -88,7 +88,7 @@ export default function AdminHome() {
 
       // Calcular crecimiento (comparar último mes vs mes anterior)
       const lastMonth = subMonths(new Date(), 1);
-      const recentOrders = allOrders.filter(
+      const recentOrderss = allOrders.filter(
         (o) => new Date(o.created_at) >= lastMonth
       );
       const previousMonth = subMonths(new Date(), 2);
@@ -98,7 +98,7 @@ export default function AdminHome() {
           new Date(o.created_at) < lastMonth
       );
 
-      const recentIncome = recentOrders.reduce(
+      const recentIncome = recentOrderss.reduce(
         (sum, o) => sum + Number(o.amount_total || 0),
         0
       );
