@@ -78,9 +78,14 @@ export const POST: APIRoute = async ({ request }) => {
     const itemsToInsert = [];
 
     for (const li of lineItems) {
-      const stripeProdId = (li.price as any).product?.id as string;
+      const stripeProduct = (li.price as any).product;
+      const stripeProdId =
+        typeof stripeProduct === "string" ? stripeProduct : stripeProduct?.id;
+
       const unitAmount = (li.price as any).unit_amount ?? 0;
       const quantity = li.quantity ?? 1;
+
+      console.log("🔍 StripeProdId:", stripeProdId);
 
       const { data: prodRec, error: prodErr } = await supabaseAdmin
         .from("products")
