@@ -49,7 +49,14 @@ export const POST: APIRoute = async ({ request }) => {
       0
     );
 
-    // 4. Inserta pedido en Supabase
+    // 4. Inserta el pedido en Supabase y captura errores
+    console.log("Intentando crear orden con estos datos:", {
+      customerId,
+      amount_total,
+      checkout_session_id: session.id,
+      product_id: items[0].id,
+    });
+
     const { error: insertError } = await supabaseAdmin.from("orders").insert([
       {
         id: uuidv4(),
@@ -66,9 +73,11 @@ export const POST: APIRoute = async ({ request }) => {
     ]);
 
     if (insertError) {
-      console.error("❌ Error insertando pedido en Supabase:", insertError);
+      console.error("❌ Error insertando pedido:", insertError);
       return new Response(
-        JSON.stringify({ error: "No se pudo guardar el pedido" }),
+        JSON.stringify({
+          error: `No se pudo guardar el pedido: ${insertError.message}`,
+        }),
         { status: 500 }
       );
     }
