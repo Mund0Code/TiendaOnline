@@ -66,6 +66,14 @@ export const POST: APIRoute = async ({ request }) => {
       0
     );
 
+    // Justo antes de insertar en Supabase, añade este log:
+    console.log("🟡 Insertando orden:", {
+      customer_id: customerId,
+      checkout_session_id: session.id,
+      product_id: items[0].id,
+      amount_total,
+    });
+
     // 5. Inserta el pedido en Supabase
     const { error: insertError } = await supabaseAdmin.from("orders").insert([
       {

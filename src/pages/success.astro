@@ -25,12 +25,14 @@ try {
   console.error("Error fetching Stripe session:", err);
 }
 
+console.log("📦 Buscando orden con session_id:", sessionId);
+
 // 2) Con el cliente ADMIN ignoramos RLS
 const { data: dbOrder, error: dbError } = await supabaseAdmin
   .from("orders")
   .select("id, amount_total, invoice_url")
   .eq("checkout_session_id", sessionId)
-  .single();
+  .maybeSingle();
 
 if (dbError) console.error("Error fetch success page:", dbError);
 const order = dbOrder || null;
