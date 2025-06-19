@@ -22,7 +22,24 @@ export const POST: APIRoute = async ({ request }) => {
       );
     }
 
-    // 1. Prepara line_items para Stripe
+    // 1. Obtener email del cliente desde profiles
+    const { data: profile, error: profileError } = await supabaseAdmin
+      .from("profiles")
+      .select("email")
+      .eq("id", customerId)
+      .single();
+
+    if (profileError || !profile?.email) {
+      console.error("❌ Error obteniendo email del perfil:", profileError);
+      return new Response(
+        JSON.stringify({
+          error: "No se pudo obtener el email del cliente",
+        }),
+        { status: 400 }
+      );
+    }
+
+    // 2. Prepara line_items para Stripe
     const line_items = items.map((item) => ({
       price_data: {
         currency: "eur",
@@ -32,7 +49,7 @@ export const POST: APIRoute = async ({ request }) => {
       quantity: item.quantity,
     }));
 
-    // 2. Crea la sesión en Stripe
+    // 3. Crea la sesión en Stripe
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ["card"],
       line_items,
@@ -43,24 +60,18 @@ export const POST: APIRoute = async ({ request }) => {
       cancel_url: `${import.meta.env.PUBLIC_SITE_URL}/cart`,
     });
 
-    // 3. Calcula total
+    // 4. Calcula total
     const amount_total = items.reduce(
       (sum, i) => sum + i.price * i.quantity,
       0
     );
 
-    // 4. Inserta el pedido en Supabase y captura errores
-    console.log("Intentando crear orden con estos datos:", {
-      customerId,
-      amount_total,
-      checkout_session_id: session.id,
-      product_id: items[0].id,
-    });
-
+    // 5. Inserta el pedido en Supabase
     const { error: insertError } = await supabaseAdmin.from("orders").insert([
       {
         id: uuidv4(),
         customer_id: customerId,
+        customer_email: profile.email, // ← ahora ya no es null
         name: items.map((i) => i.name).join(", "),
         amount_total,
         status: "pending",
