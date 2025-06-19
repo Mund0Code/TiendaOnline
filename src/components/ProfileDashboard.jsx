@@ -38,15 +38,16 @@ export default function ProfileDashboard() {
       .from("orders")
       .select(
         `
-        id,
-        created_at,
-        amount_total,
-        downloaded,
-        product_id,
-        invoice_url,
-        invoice_downloaded,
-        product:products(name)
-      `
+          id,
+          created_at,
+          amount_total,
+          downloaded,
+          invoice_url,
+          invoice_downloaded,
+          order_items (
+            product:products(name)
+          )
+        `
       )
       .eq("customer_id", user.id)
       .order("created_at", { ascending: false });
@@ -72,8 +73,8 @@ export default function ProfileDashboard() {
       orders.slice(0, 3).map((o) => ({
         id: o.id,
         created_at: o.created_at,
-        productName: o.product?.name || "—",
-        product_id: o.product_id,
+        productName: o.order_items?.[0]?.product?.name || "—",
+        product_id: o.order_items?.[0]?.product?.id || null,
         book_downloaded: o.downloaded,
         invoice_downloaded: o.invoice_downloaded,
         invoice_url: o.invoice_url,

@@ -75,6 +75,49 @@ export const POST: APIRoute = async ({ request }) => {
     });
 
     // 5. Inserta el pedido en Supabase
+    const orderId = uuidv4();
+    const { error: orderError } = await supabaseAdmin.from("orders").insert([
+      {
+        id: orderId,
+        customer_id: customerId,
+        checkout_session_id: session.id,
+        product_id: items[0].id,
+        amount_total,
+      },
+    ]);
+
+    if (orderError) {
+      console.error("❌ Error insertando orden:", orderError);
+      return new Response(
+        JSON.stringify({
+          error: `No se pudo guardar la orden: ${orderError.message}`,
+        }),
+        { status: 500 }
+      );
+    }
+
+    // 6. Inserta order_items por cada item
+    const orderItems = items.map((item) => ({
+      order_id: orderId, // usa el mismo UUID que usaste para orders
+      product_id: item.id,
+      quantity: item.quantity,
+      unit_price: item.price,
+    }));
+
+    const { error: orderItemsError } = await supabaseAdmin
+      .from("order_items")
+      .insert(orderItems);
+
+    if (orderItemsError) {
+      console.error("❌ Error insertando order_items:", orderItemsError);
+      return new Response(
+        JSON.stringify({
+          error: `No se pudo guardar los items del pedido: ${orderItemsError?.message ?? "Error desconocido"}`,
+        }),
+        { status: 500 }
+      );
+    }
+
     return new Response(JSON.stringify({ url: session.url }), {
       status: 200,
       headers: { "Content-Type": "application/json" },
