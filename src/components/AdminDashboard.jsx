@@ -181,7 +181,7 @@ export default function AdminDashboard() {
       </aside>
 
       {/* Contenido principal */}
-      <main className="lg:ml-72 min-h-screen">
+      <main className="lg:ml-72 min-h-screen mt-24">
         {/* Contenido de la página */}
         <div className="p-6 lg:p-8">
           <div className="max-w-7xl mx-auto">{TABS[activeTab].component}</div>
