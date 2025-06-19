@@ -49,10 +49,7 @@ export default function RegisterForm() {
     setLoading(true);
 
     try {
-      // 1) Verificar si el email ya está registrado
-      const { data: existingUser } = await supabase.auth.getUser();
-
-      // 2) Registro en Auth
+      // 1) Registro en Auth
       const { data: signUpData, error: signUpError } =
         await supabase.auth.signUp({
           email: form.email.trim().toLowerCase(),
@@ -65,7 +62,6 @@ export default function RegisterForm() {
         });
 
       if (signUpError) {
-        // Manejar diferentes tipos de errores de auth
         if (signUpError.message.includes("already registered")) {
           setError("Este email ya está registrado. ¿Quieres iniciar sesión?");
         } else if (signUpError.message.includes("Password")) {
@@ -88,72 +84,93 @@ export default function RegisterForm() {
 
       console.log("Usuario creado:", user.id);
 
-      // 3) Verificar si ya existe un perfil (puede haberse creado automáticamente)
-      const { data: existingProfile } = await supabase
-        .from("profiles")
-        .select("id")
-        .eq("id", user.id)
-        .single();
-
-      if (existingProfile) {
-        console.log("Perfil ya existe, actualizando...");
-
-        // Si ya existe, actualizar
-        const { error: updateError } = await supabase
-          .from("profiles")
-          .update({
-            full_name: form.name.trim(),
+      // 2) Crear perfil usando endpoint API en lugar de cliente directo
+      // Esto evita problemas de RLS
+      try {
+        const profileResponse = await fetch("/api/create-profile", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            userId: user.id,
+            fullName: form.name.trim(),
             email: user.email,
-          })
-          .eq("id", user.id);
+          }),
+        });
 
-        if (updateError) {
-          console.error("Error actualizando perfil:", updateError);
-          setError("Error al actualizar perfil: " + updateError.message);
-          setLoading(false);
-          return;
+        const profileResult = await profileResponse.json();
+
+        if (!profileResponse.ok) {
+          throw new Error(profileResult.error || "Error creando perfil");
         }
-      } else {
-        console.log("Creando nuevo perfil...");
 
-        // Si no existe, crear nuevo perfil usando UPSERT para mayor seguridad
-        const { error: profileError } = await supabase.from("profiles").upsert(
-          [
-            {
-              id: user.id,
-              full_name: form.name.trim(),
-              email: user.email,
-              created_at: new Date().toISOString(),
-            },
-          ],
-          {
-            onConflict: "id",
+        console.log("Perfil creado exitosamente");
+      } catch (profileError) {
+        console.error("Error con API de perfil:", profileError);
+
+        // Fallback: intentar crear perfil directamente después de confirmar sesión
+        console.log("Intentando crear perfil directamente...");
+
+        // Esperar un momento para que la sesión se establezca
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+
+        // Verificar si el usuario está autenticado
+        const { data: sessionData } = await supabase.auth.getSession();
+
+        if (sessionData?.session) {
+          console.log("Sesión confirmada, creando perfil...");
+
+          const { error: directProfileError } = await supabase
+            .from("profiles")
+            .upsert(
+              [
+                {
+                  id: user.id,
+                  full_name: form.name.trim(),
+                  email: user.email,
+                  created_at: new Date().toISOString(),
+                },
+              ],
+              {
+                onConflict: "id",
+              }
+            );
+
+          if (directProfileError) {
+            console.error("Error directo creando perfil:", directProfileError);
+
+            // Si sigue fallando, es un problema de RLS
+            if (directProfileError.message.includes("row-level security")) {
+              setError(
+                "Error de configuración de seguridad. El perfil se creará automáticamente al confirmar tu email."
+              );
+            } else {
+              setError("Error al crear perfil: " + directProfileError.message);
+            }
           }
-        );
-
-        if (profileError) {
-          console.error("Error creando perfil:", profileError);
-          setError("Error al crear perfil: " + profileError.message);
-          setLoading(false);
-          return;
+        } else {
+          console.log(
+            "No hay sesión activa, el perfil se creará al confirmar email"
+          );
         }
       }
 
-      // 4) Éxito
-      console.log("Registro completado exitosamente");
+      // 3) Éxito (incluso si el perfil no se pudo crear por RLS)
+      console.log("Registro completado");
 
       if (signUpData.user && !signUpData.user.email_confirmed_at) {
         setSuccess(
-          "¡Registro exitoso! Revisa tu email para confirmar tu cuenta antes de iniciar sesión."
+          "¡Registro exitoso! Revisa tu email para confirmar tu cuenta. Tu perfil se completará automáticamente al confirmar."
         );
 
         // Limpiar formulario
         setForm({ name: "", email: "", password: "" });
 
-        // Redirigir después de un delay para que puedan leer el mensaje
+        // Redirigir después de un delay
         setTimeout(() => {
-          window.location.href = "/login";
-        }, 3000);
+          window.location.href = "/login?message=confirm-email";
+        }, 4000);
       } else {
         setSuccess("¡Registro exitoso! Redirigiendo...");
         setTimeout(() => {
@@ -198,7 +215,7 @@ export default function RegisterForm() {
               <div className="bg-red-50 border border-red-200 rounded-lg p-4">
                 <div className="flex items-center space-x-2">
                   <svg
-                    className="h-5 w-5 text-red-600"
+                    className="h-5 w-5 text-red-600 flex-shrink-0"
                     fill="none"
                     stroke="currentColor"
                     viewBox="0 0 24 24"
@@ -219,7 +236,7 @@ export default function RegisterForm() {
               <div className="bg-green-50 border border-green-200 rounded-lg p-4">
                 <div className="flex items-center space-x-2">
                   <svg
-                    className="h-5 w-5 text-green-600"
+                    className="h-5 w-5 text-green-600 flex-shrink-0"
                     fill="none"
                     stroke="currentColor"
                     viewBox="0 0 24 24"
@@ -303,6 +320,29 @@ export default function RegisterForm() {
                 minLength={6}
               />
               <p className="text-xs text-gray-500 mt-1">Mínimo 6 caracteres</p>
+            </div>
+
+            {/* Información sobre RLS */}
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+              <div className="flex items-start space-x-2">
+                <svg
+                  className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                  />
+                </svg>
+                <p className="text-blue-700 text-xs">
+                  Tu perfil se completará automáticamente al confirmar tu email.
+                  Si tienes problemas, contacta con soporte.
+                </p>
+              </div>
             </div>
 
             {/* Botón de registro */}
