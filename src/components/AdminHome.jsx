@@ -44,20 +44,6 @@ export default function AdminHome() {
             supabase.from("orders").select("amount_total"),
           ]);
 
-        const { data: allUsers } = await supabase
-          .from("profiles")
-          .select("id, email, is_admin");
-
-        console.log("Todos los usuarios:", allUsers);
-        console.log(
-          "Clientes:",
-          allUsers.filter((u) => !u.is_admin)
-        );
-        console.log(
-          "Admins:",
-          allUsers.filter((u) => u.is_admin)
-        );
-
         // Procesar resultados con manejo de errores
         const totalOrders =
           ordersCount.status === "fulfilled" ? ordersCount.value.count || 0 : 0;
