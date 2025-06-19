@@ -35,29 +35,39 @@ export default function AdminHome() {
       setLoading(true);
 
       try {
-        // 1) Cargar métricas globales
+        // 1) Cargar métricas globales con mejor manejo de errores
         const [ordersCount, productsCount, usersCount, ordersData] =
-          await Promise.all([
-            supabase
-              .from("orders")
-              .select("amount_total", { count: "exact", columns: [] }),
-            supabase
-              .from("products")
-              .select("id", { count: "exact", columns: [] }),
-            supabase
-              .from("profiles")
-              .select("id", { count: "exact", columns: [] }),
+          await Promise.allSettled([
+            supabase.from("orders").select("amount_total", { count: "exact" }),
+            supabase.from("products").select("id", { count: "exact" }),
+            supabase.from("profiles").select("id", { count: "exact" }),
             supabase.from("orders").select("amount_total"),
           ]);
 
-        const totalOrders = ordersCount.count || 0;
-        const totalProducts = productsCount.count || 0;
-        const totalClients = usersCount.count || 0;
+        // Procesar resultados con manejo de errores
+        const totalOrders =
+          ordersCount.status === "fulfilled" ? ordersCount.value.count || 0 : 0;
+        const totalProducts =
+          productsCount.status === "fulfilled"
+            ? productsCount.value.count || 0
+            : 0;
+        const totalClients =
+          usersCount.status === "fulfilled" ? usersCount.value.count || 0 : 0;
+
         const totalIncome =
-          ordersData.data?.reduce(
-            (sum, o) => sum + Number(o.amount_total),
-            0
-          ) || 0;
+          ordersData.status === "fulfilled" && ordersData.value.data
+            ? ordersData.value.data.reduce(
+                (sum, o) => sum + Number(o.amount_total || 0),
+                0
+              )
+            : 0;
+
+        console.log("📊 Stats cargadas:", {
+          totalOrders,
+          totalProducts,
+          totalClients,
+          totalIncome,
+        });
 
         setStats({
           totalIncome: totalIncome.toFixed(2),
@@ -66,37 +76,57 @@ export default function AdminHome() {
           totalClients,
         });
 
-        // 2) Datos de ventas últimos 7 días
+        // 2) Datos de ventas últimos 7 días con mejor formato de fecha
         const days = Array.from({ length: 7 }).map((_, i) => {
           const d = new Date();
           d.setDate(d.getDate() - (6 - i));
-          return d.toISOString().slice(0, 10);
+          d.setHours(0, 0, 0, 0); // Resetear horas para comparación exacta
+          return d.toISOString();
         });
 
-        const { data: salesData } = await supabase
+        const sevenDaysAgo = new Date();
+        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+        sevenDaysAgo.setHours(0, 0, 0, 0);
+
+        const { data: salesData, error: salesError } = await supabase
           .from("orders")
           .select("amount_total, created_at")
-          .gte("created_at", days[0]);
+          .gte("created_at", sevenDaysAgo.toISOString());
 
-        const grouped = days.map((date) => {
-          const dayName = new Date(date).toLocaleDateString("es-ES", {
+        if (salesError) {
+          console.error("❌ Error cargando datos de ventas:", salesError);
+        }
+
+        const grouped = days.map((dateISO) => {
+          const date = new Date(dateISO);
+          const dayName = date.toLocaleDateString("es-ES", {
             weekday: "short",
           });
+          const dayStart = new Date(date);
+          dayStart.setHours(0, 0, 0, 0);
+          const dayEnd = new Date(date);
+          dayEnd.setHours(23, 59, 59, 999);
+
+          const dayTotal =
+            salesData
+              ?.filter((o) => {
+                const orderDate = new Date(o.created_at);
+                return orderDate >= dayStart && orderDate <= dayEnd;
+              })
+              .reduce((sum, o) => sum + Number(o.amount_total || 0), 0) || 0;
+
           return {
             date: dayName,
-            total:
-              salesData
-                ?.filter((o) => o.created_at.startsWith(date))
-                .reduce((sum, o) => sum + Number(o.amount_total), 0) || 0,
+            total: Math.round(dayTotal * 100) / 100, // Redondear a 2 decimales
           };
         });
 
         setChartData(grouped);
 
-        // 3) Cargar actividad reciente real
+        // 3) Cargar actividad reciente
         await loadRecentActivity();
       } catch (error) {
-        console.error("Error cargando datos del dashboard:", error);
+        console.error("❌ Error cargando datos del dashboard:", error);
       } finally {
         setLoading(false);
       }
@@ -110,24 +140,34 @@ export default function AdminHome() {
       const activities = [];
       const now = new Date();
 
+      // Fechas con mejor formato
+      const oneDayAgo = new Date(
+        now.getTime() - 24 * 60 * 60 * 1000
+      ).toISOString();
+      const twoDaysAgo = new Date(
+        now.getTime() - 48 * 60 * 60 * 1000
+      ).toISOString();
+      const sevenDaysAgo = new Date(
+        now.getTime() - 7 * 24 * 60 * 60 * 1000
+      ).toISOString();
+
       // Obtener pedidos recientes (últimas 24 horas)
-      const { data: recentOrders } = await supabase
+      const { data: recentOrders, error: ordersError } = await supabase
         .from("orders")
         .select("id, amount_total, created_at")
-        .gte(
-          "created_at",
-          new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString()
-        )
+        .gte("created_at", oneDayAgo)
         .order("created_at", { ascending: false })
         .limit(3);
 
-      if (recentOrders) {
+      if (ordersError) {
+        console.warn("⚠️ Error cargando pedidos recientes:", ordersError);
+      } else if (recentOrders) {
         recentOrders.forEach((order) => {
           activities.push({
             id: `order-${order.id}`,
             icon: "🛒",
             title: "Nuevo pedido recibido",
-            description: `Pedido #${order.id.substring(0, 8)} por €${Number(order.amount_total).toFixed(2)}`,
+            description: `Pedido #${order.id.substring(0, 8)} por €${Number(order.amount_total || 0).toFixed(2)}`,
             time: getTimeAgo(order.created_at),
             color: "green",
             timestamp: new Date(order.created_at),
@@ -135,18 +175,18 @@ export default function AdminHome() {
         });
       }
 
-      // Obtener usuarios recientes (últimas 48 horas)
-      const { data: recentUsers } = await supabase
+      // Obtener usuarios recientes (últimas 48 horas) con mejor query
+      const { data: recentUsers, error: usersError } = await supabase
         .from("profiles")
         .select("id, email, full_name, created_at")
-        .gte(
-          "created_at",
-          new Date(now.getTime() - 48 * 60 * 60 * 1000).toISOString()
-        )
+        .gte("created_at", twoDaysAgo)
         .order("created_at", { ascending: false })
-        .limit(3);
+        .limit(5); // Aumentar límite para ver más usuarios
 
-      if (recentUsers) {
+      if (usersError) {
+        console.warn("⚠️ Error cargando usuarios recientes:", usersError);
+      } else if (recentUsers) {
+        console.log("👥 Usuarios recientes encontrados:", recentUsers.length);
         recentUsers.forEach((user) => {
           activities.push({
             id: `user-${user.id}`,
@@ -162,22 +202,22 @@ export default function AdminHome() {
         });
       }
 
-      // Obtener productos recientes (últimas 7 días)
-      const { data: recentProducts } = await supabase
+      // Obtener productos recientes con query corregida
+      const { data: recentProducts, error: productsError } = await supabase
         .from("products")
         .select("id, name, created_at, updated_at")
-        .gte(
-          "updated_at",
-          new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString()
-        )
+        .gte("updated_at", sevenDaysAgo)
         .order("updated_at", { ascending: false })
-        .limit(2);
+        .limit(3);
 
-      if (recentProducts) {
+      if (productsError) {
+        console.warn("⚠️ Error cargando productos recientes:", productsError);
+      } else if (recentProducts) {
         recentProducts.forEach((product) => {
-          const isNew =
-            new Date(product.created_at).getTime() ===
-            new Date(product.updated_at).getTime();
+          const createdTime = new Date(product.created_at).getTime();
+          const updatedTime = new Date(product.updated_at).getTime();
+          const isNew = Math.abs(createdTime - updatedTime) < 1000; // Diferencia menor a 1 segundo
+
           activities.push({
             id: `product-${product.id}`,
             icon: "📦",
@@ -190,38 +230,39 @@ export default function AdminHome() {
         });
       }
 
-      // Obtener mensajes de soporte recientes (últimas 48 horas)
-      const { data: recentSupport } = await supabase
-        .from("support_messages")
-        .select("id, email, subject, category, created_at")
-        .gte(
-          "created_at",
-          new Date(now.getTime() - 48 * 60 * 60 * 1000).toISOString()
-        )
-        .order("created_at", { ascending: false })
-        .limit(3);
+      // Obtener mensajes de soporte recientes (si existe la tabla)
+      try {
+        const { data: recentSupport, error: supportError } = await supabase
+          .from("support_messages")
+          .select("id, email, subject, category, created_at")
+          .gte("created_at", twoDaysAgo)
+          .order("created_at", { ascending: false })
+          .limit(3);
 
-      if (recentSupport) {
-        recentSupport.forEach((message) => {
-          const categoryLabels = {
-            technical: "problema técnico",
-            billing: "facturación",
-            account: "cuenta",
-            download: "descarga",
-            general: "consulta general",
-            other: "consulta",
-          };
+        if (!supportError && recentSupport) {
+          recentSupport.forEach((message) => {
+            const categoryLabels = {
+              technical: "problema técnico",
+              billing: "facturación",
+              account: "cuenta",
+              download: "descarga",
+              general: "consulta general",
+              other: "consulta",
+            };
 
-          activities.push({
-            id: `support-${message.id}`,
-            icon: "💬",
-            title: "Mensaje de soporte",
-            description: `${categoryLabels[message.category] || "consulta"}: ${message.subject || "Sin asunto"}`,
-            time: getTimeAgo(message.created_at),
-            color: "purple",
-            timestamp: new Date(message.created_at),
+            activities.push({
+              id: `support-${message.id}`,
+              icon: "💬",
+              title: "Mensaje de soporte",
+              description: `${categoryLabels[message.category] || "consulta"}: ${message.subject || "Sin asunto"}`,
+              time: getTimeAgo(message.created_at),
+              color: "purple",
+              timestamp: new Date(message.created_at),
+            });
           });
-        });
+        }
+      } catch (supportError) {
+        console.log("ℹ️ Tabla support_messages no existe o no es accesible");
       }
 
       // Ordenar por timestamp más reciente y tomar los primeros 6
@@ -229,9 +270,10 @@ export default function AdminHome() {
         .sort((a, b) => b.timestamp - a.timestamp)
         .slice(0, 6);
 
+      console.log("📋 Actividades cargadas:", sortedActivities.length);
       setRecentActivity(sortedActivities);
     } catch (error) {
-      console.error("Error cargando actividad reciente:", error);
+      console.error("❌ Error cargando actividad reciente:", error);
       // Fallback a actividad de ejemplo si hay error
       setRecentActivity([
         {
@@ -270,6 +312,12 @@ export default function AdminHome() {
     });
   };
 
+  // Función para refrescar datos manualmente
+  const refreshData = async () => {
+    setLoading(true);
+    await loadDashboardData();
+  };
+
   if (loading) {
     return (
       <div className="space-y-6">
@@ -297,7 +345,7 @@ export default function AdminHome() {
 
   return (
     <div className="space-y-8">
-      {/* Bienvenida */}
+      {/* Bienvenida con botón de refresh */}
       <div className="bg-gradient-to-r from-blue-600 via-purple-600 to-indigo-600 rounded-2xl p-8 text-white shadow-2xl">
         <div className="flex items-center justify-between">
           <div>
@@ -313,9 +361,30 @@ export default function AdminHome() {
               })}
             </p>
           </div>
-          <div className="hidden lg:block">
-            <div className="w-24 h-24 bg-white/20 rounded-full flex items-center justify-center">
-              <span className="text-4xl">📊</span>
+          <div className="flex items-center space-x-4">
+            <button
+              onClick={refreshData}
+              className="bg-white/20 hover:bg-white/30 backdrop-blur-sm rounded-xl p-3 transition-all duration-200 hover:scale-105"
+              title="Actualizar datos"
+            >
+              <svg
+                className="w-6 h-6"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                />
+              </svg>
+            </button>
+            <div className="hidden lg:block">
+              <div className="w-24 h-24 bg-white/20 rounded-full flex items-center justify-center">
+                <span className="text-4xl">📊</span>
+              </div>
             </div>
           </div>
         </div>
