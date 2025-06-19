@@ -2,7 +2,7 @@ import type { APIRoute } from "astro";
 import { Stripe } from "stripe";
 import { supabaseAdmin } from "../../lib/supabaseAdminClient";
 
-const stripe = new Stripe(import.meta.env.STRIPE_SECRET_KEY, {
+const stripe = new Stripe(import.meta.env.PUBLIC_STRIPE_SECRET_KEY, {
   apiVersion: "2025-05-28.basil",
 });
 

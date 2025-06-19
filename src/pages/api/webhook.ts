@@ -9,10 +9,10 @@ export const config = {
   },
 };
 
-const stripe = new Stripe(import.meta.env.STRIPE_SECRET_KEY!, {
+const stripe = new Stripe(import.meta.env.PUBLIC_STRIPE_SECRET_KEY!, {
   apiVersion: "2025-05-28.basil",
 });
-const endpointSecret = import.meta.env.STRIPE_WEBHOOK_SECRET!;
+const endpointSecret = import.meta.env.PUBLIC_STRIPE_WEBHOOK_SECRET!;
 
 export const POST: APIRoute = async ({ request }) => {
   console.log("🚀 WEBHOOK EJECUTÁNDOSE - timestamp:", new Date().toISOString());
