@@ -15,7 +15,9 @@ export default function AdminProducts() {
   const [editingId, setEditingId] = useState(null);
   const [error, setError] = useState(null);
   const [showModal, setShowModal] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [loadingProducts, setLoadingProducts] = useState(false);
+  const [uploadingFile, setUploadingFile] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     fetchCategories();
@@ -32,7 +34,7 @@ export default function AdminProducts() {
   };
 
   const fetchProducts = async () => {
-    setLoading(true);
+    setLoadingProducts(true);
     const { data, error } = await supabase
       .from("products")
       .select(
@@ -52,11 +54,14 @@ export default function AdminProducts() {
       .order("created_at", { ascending: false });
     if (error) setError(error.message);
     else setProducts(data);
-    setLoading(false);
+    setLoadingProducts(false);
   };
 
-  const handleChange = (e) =>
+  const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value });
+    // Limpiar error cuando el usuario empiece a escribir
+    if (error) setError(null);
+  };
 
   const startAdd = () => {
     setEditingId(null);
@@ -68,6 +73,7 @@ export default function AdminProducts() {
       file_path: "",
       category_id: "",
     });
+    setError(null);
     setShowModal(true);
   };
 
@@ -81,70 +87,146 @@ export default function AdminProducts() {
       file_path: p.file_path || "",
       category_id: p.category_id || "",
     });
+    setError(null);
     setShowModal(true);
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError(null);
-    setLoading(true);
+    setSubmitting(true);
+
+    // Validaciones
+    if (!form.name.trim()) {
+      setError("El nombre del libro es obligatorio.");
+      setSubmitting(false);
+      return;
+    }
+
+    if (!form.price || parseFloat(form.price) <= 0) {
+      setError("El precio debe ser mayor a 0.");
+      setSubmitting(false);
+      return;
+    }
+
+    if (!form.category_id) {
+      setError("Debes seleccionar una categoría.");
+      setSubmitting(false);
+      return;
+    }
 
     if (!form.file_path) {
       setError("Debes subir el PDF del libro.");
-      setLoading(false);
-      return;
-    }
-    if (!form.category_id) {
-      setError("Debes seleccionar una categoría.");
-      setLoading(false);
+      setSubmitting(false);
       return;
     }
 
-    const payload = {
-      name: form.name,
-      description: form.description,
-      price: parseFloat(form.price),
-      image_url: form.image_url,
-      file_path: form.file_path,
-      category_id: form.category_id,
-    };
+    try {
+      const payload = {
+        name: form.name.trim(),
+        description: form.description.trim(),
+        price: parseFloat(form.price),
+        image_url: form.image_url.trim(),
+        file_path: form.file_path,
+        category_id: form.category_id,
+      };
 
-    const action = editingId
-      ? supabase.from("products").update(payload).eq("id", editingId)
-      : supabase.from("products").insert([payload]);
+      const action = editingId
+        ? supabase.from("products").update(payload).eq("id", editingId)
+        : supabase.from("products").insert([payload]);
 
-    const { error: err } = await action;
-    if (err) setError(err.message);
-    else {
-      setShowModal(false);
-      fetchProducts();
+      const { error: err } = await action;
+
+      if (err) {
+        setError(err.message);
+      } else {
+        setShowModal(false);
+        await fetchProducts();
+        // Limpiar el formulario después de guardar exitosamente
+        setForm({
+          name: "",
+          description: "",
+          price: "",
+          image_url: "",
+          file_path: "",
+          category_id: "",
+        });
+      }
+    } catch (err) {
+      setError("Error inesperado: " + err.message);
+    } finally {
+      setSubmitting(false);
     }
-    setLoading(false);
   };
 
   const handleDelete = async (id) => {
     if (!confirm("¿Eliminar este producto?")) return;
-    setLoading(true);
-    const { error } = await supabase.from("products").delete().eq("id", id);
-    if (error) setError(error.message);
-    else fetchProducts();
-    setLoading(false);
+
+    try {
+      const { error } = await supabase.from("products").delete().eq("id", id);
+      if (error) {
+        setError(error.message);
+      } else {
+        await fetchProducts();
+      }
+    } catch (err) {
+      setError("Error eliminando el producto: " + err.message);
+    }
   };
 
   const uploadFile = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    // Validar que sea un PDF
+    if (file.type !== "application/pdf") {
+      setError("Solo se permiten archivos PDF.");
+      return;
+    }
+
+    // Validar tamaño (ejemplo: max 10MB)
+    const maxSize = 10 * 1024 * 1024; // 10MB
+    if (file.size > maxSize) {
+      setError("El archivo es demasiado grande. Máximo 10MB.");
+      return;
+    }
+
     setError(null);
-    setLoading(true);
+    setUploadingFile(true);
 
-    const fd = new FormData();
-    fd.append("file", file);
-    const res = await fetch("/api/upload", { method: "POST", body: fd });
-    const { path, error: uploadErr } = await res.json();
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
 
-    if (uploadErr) setError("Error subiendo: " + uploadErr);
-    else setForm((f) => ({ ...f, file_path: path }));
-    setLoading(false);
+      const res = await fetch("/api/upload", {
+        method: "POST",
+        body: fd,
+      });
+
+      if (!res.ok) {
+        throw new Error(`Error HTTP: ${res.status}`);
+      }
+
+      const data = await res.json();
+
+      if (data.error) {
+        setError("Error subiendo archivo: " + data.error);
+      } else if (data.path) {
+        setForm((f) => ({ ...f, file_path: data.path }));
+      } else {
+        setError("Respuesta inesperada del servidor.");
+      }
+    } catch (err) {
+      setError("Error subiendo archivo: " + err.message);
+    } finally {
+      setUploadingFile(false);
+    }
+  };
+
+  const closeModal = () => {
+    setShowModal(false);
+    setError(null);
+    // No limpiar el form aquí para que el usuario no pierda los datos si cierra por accidente
   };
 
   return (
@@ -163,7 +245,8 @@ export default function AdminProducts() {
             </div>
             <button
               onClick={startAdd}
-              className="inline-flex items-center px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white font-semibold rounded-xl hover:from-blue-700 hover:to-purple-700 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
+              disabled={submitting || uploadingFile}
+              className="inline-flex items-center px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white font-semibold rounded-xl hover:from-blue-700 hover:to-purple-700 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
             >
               <svg
                 className="w-5 h-5 mr-2"
@@ -186,23 +269,43 @@ export default function AdminProducts() {
         {/* Error Alert */}
         {error && (
           <div className="bg-red-50 border-l-4 border-red-400 p-4 mb-6 rounded-lg">
-            <div className="flex">
-              <div className="flex-shrink-0">
+            <div className="flex justify-between items-start">
+              <div className="flex">
+                <div className="flex-shrink-0">
+                  <svg
+                    className="h-5 w-5 text-red-400"
+                    viewBox="0 0 20 20"
+                    fill="currentColor"
+                  >
+                    <path
+                      fillRule="evenodd"
+                      d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                </div>
+                <div className="ml-3">
+                  <p className="text-sm text-red-700">{error}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setError(null)}
+                className="text-red-400 hover:text-red-600"
+              >
                 <svg
-                  className="h-5 w-5 text-red-400"
-                  viewBox="0 0 20 20"
-                  fill="currentColor"
+                  className="w-4 h-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
                 >
                   <path
-                    fillRule="evenodd"
-                    d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
-                    clipRule="evenodd"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M6 18L18 6M6 6l12 12"
                   />
                 </svg>
-              </div>
-              <div className="ml-3">
-                <p className="text-sm text-red-700">{error}</p>
-              </div>
+              </button>
             </div>
           </div>
         )}
@@ -217,8 +320,9 @@ export default function AdminProducts() {
                     {editingId ? "✏️ Editar Producto" : "✨ Nuevo Producto"}
                   </h2>
                   <button
-                    onClick={() => setShowModal(false)}
-                    className="p-2 hover:bg-gray-100 rounded-full transition-colors duration-200"
+                    onClick={closeModal}
+                    disabled={submitting || uploadingFile}
+                    className="p-2 hover:bg-gray-100 rounded-full transition-colors duration-200 disabled:opacity-50"
                   >
                     <svg
                       className="w-6 h-6 text-gray-500"
@@ -242,14 +346,15 @@ export default function AdminProducts() {
                 <div className="space-y-2">
                   <label className="text-sm font-semibold text-gray-700 flex items-center">
                     <span className="mr-2">📖</span>
-                    Nombre del libro
+                    Nombre del libro *
                   </label>
                   <input
                     name="name"
                     value={form.name}
                     onChange={handleChange}
                     required
-                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                    disabled={submitting}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 disabled:bg-gray-100"
                     placeholder="Ej: El arte de programar en JavaScript"
                   />
                 </div>
@@ -265,7 +370,8 @@ export default function AdminProducts() {
                     value={form.description}
                     onChange={handleChange}
                     rows="4"
-                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 resize-none"
+                    disabled={submitting}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 resize-none disabled:bg-gray-100"
                     placeholder="Describe brevemente el contenido del libro..."
                   />
                 </div>
@@ -275,16 +381,18 @@ export default function AdminProducts() {
                   <div className="space-y-2">
                     <label className="text-sm font-semibold text-gray-700 flex items-center">
                       <span className="mr-2">💰</span>
-                      Precio (€)
+                      Precio (€) *
                     </label>
                     <input
                       name="price"
                       type="number"
                       step="0.01"
+                      min="0.01"
                       value={form.price}
                       onChange={handleChange}
                       required
-                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                      disabled={submitting}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 disabled:bg-gray-100"
                       placeholder="0.00"
                     />
                   </div>
@@ -292,14 +400,15 @@ export default function AdminProducts() {
                   <div className="space-y-2">
                     <label className="text-sm font-semibold text-gray-700 flex items-center">
                       <span className="mr-2">🏷️</span>
-                      Categoría
+                      Categoría *
                     </label>
                     <select
                       name="category_id"
                       value={form.category_id}
                       onChange={handleChange}
                       required
-                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                      disabled={submitting}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 disabled:bg-gray-100"
                     >
                       <option value="">Selecciona una categoría</option>
                       {categories.map((c) => (
@@ -319,9 +428,11 @@ export default function AdminProducts() {
                   </label>
                   <input
                     name="image_url"
+                    type="url"
                     value={form.image_url}
                     onChange={handleChange}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                    disabled={submitting}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 disabled:bg-gray-100"
                     placeholder="https://ejemplo.com/portada.jpg"
                   />
                 </div>
@@ -330,38 +441,56 @@ export default function AdminProducts() {
                 <div className="space-y-2">
                   <label className="text-sm font-semibold text-gray-700 flex items-center">
                     <span className="mr-2">📄</span>
-                    Archivo PDF del libro
+                    Archivo PDF del libro *
                   </label>
-                  <div className="border-2 border-dashed border-gray-300 rounded-xl p-6 text-center hover:border-blue-400 transition-colors duration-200">
+                  <div
+                    className={`border-2 border-dashed rounded-xl p-6 text-center transition-colors duration-200 ${
+                      uploadingFile
+                        ? "border-blue-400 bg-blue-50"
+                        : "border-gray-300 hover:border-blue-400"
+                    }`}
+                  >
                     <input
                       type="file"
                       accept="application/pdf"
                       onChange={uploadFile}
+                      disabled={submitting || uploadingFile}
                       className="hidden"
                       id="pdf-upload"
                     />
                     <label
                       htmlFor="pdf-upload"
-                      className="cursor-pointer flex flex-col items-center space-y-2"
+                      className={`${uploadingFile || submitting ? "cursor-not-allowed" : "cursor-pointer"} flex flex-col items-center space-y-2`}
                     >
-                      <svg
-                        className="w-12 h-12 text-gray-400"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
-                        />
-                      </svg>
-                      <span className="text-sm text-gray-600">
-                        Haz clic para subir un archivo PDF
-                      </span>
+                      {uploadingFile ? (
+                        <>
+                          <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                          <span className="text-sm text-blue-600 font-medium">
+                            Subiendo archivo...
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <svg
+                            className="w-12 h-12 text-gray-400"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
+                            />
+                          </svg>
+                          <span className="text-sm text-gray-600">
+                            Haz clic para subir un archivo PDF (máx. 10MB)
+                          </span>
+                        </>
+                      )}
                     </label>
-                    {form.file_path && (
+                    {form.file_path && !uploadingFile && (
                       <div className="mt-4 p-3 bg-green-50 rounded-lg">
                         <p className="text-sm text-green-700 flex items-center">
                           <svg
@@ -388,21 +517,27 @@ export default function AdminProducts() {
                 <div className="flex flex-col sm:flex-row gap-3 pt-6 border-t border-gray-200">
                   <button
                     type="button"
-                    onClick={() => setShowModal(false)}
-                    className="flex-1 px-6 py-3 text-gray-700 bg-gray-100 font-semibold rounded-xl hover:bg-gray-200 transition-all duration-200"
+                    onClick={closeModal}
+                    disabled={submitting || uploadingFile}
+                    className="flex-1 px-6 py-3 text-gray-700 bg-gray-100 font-semibold rounded-xl hover:bg-gray-200 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Cancelar
                   </button>
                   <button
                     type="submit"
-                    disabled={loading}
-                    className="flex-1 px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white font-semibold rounded-xl hover:from-green-700 hover:to-emerald-700 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled={submitting || uploadingFile || !form.file_path}
+                    className="flex-1 px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white font-semibold rounded-xl hover:from-green-700 hover:to-emerald-700 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
                   >
-                    {loading
-                      ? "Guardando..."
-                      : editingId
-                        ? "💾 Guardar cambios"
-                        : "✨ Crear producto"}
+                    {submitting ? (
+                      <span className="flex items-center justify-center">
+                        <div className="inline-block animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                        Guardando...
+                      </span>
+                    ) : editingId ? (
+                      "💾 Guardar cambios"
+                    ) : (
+                      "✨ Crear producto"
+                    )}
                   </button>
                 </div>
               </form>
@@ -418,7 +553,7 @@ export default function AdminProducts() {
             </h3>
           </div>
 
-          {loading ? (
+          {loadingProducts ? (
             <div className="p-12 text-center">
               <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
               <p className="mt-4 text-gray-600">Cargando productos...</p>
@@ -483,7 +618,8 @@ export default function AdminProducts() {
                     <div className="flex gap-2 flex-shrink-0">
                       <button
                         onClick={() => startEdit(p)}
-                        className="px-4 py-2 bg-amber-100 text-amber-700 font-medium rounded-lg hover:bg-amber-200 transition-colors duration-200 flex items-center"
+                        disabled={submitting || uploadingFile}
+                        className="px-4 py-2 bg-amber-100 text-amber-700 font-medium rounded-lg hover:bg-amber-200 transition-colors duration-200 flex items-center disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         <svg
                           className="w-4 h-4 mr-1"
@@ -502,7 +638,8 @@ export default function AdminProducts() {
                       </button>
                       <button
                         onClick={() => handleDelete(p.id)}
-                        className="px-4 py-2 bg-red-100 text-red-700 font-medium rounded-lg hover:bg-red-200 transition-colors duration-200 flex items-center"
+                        disabled={submitting || uploadingFile}
+                        className="px-4 py-2 bg-red-100 text-red-700 font-medium rounded-lg hover:bg-red-200 transition-colors duration-200 flex items-center disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         <svg
                           className="w-4 h-4 mr-1"
