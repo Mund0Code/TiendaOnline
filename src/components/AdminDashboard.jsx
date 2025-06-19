@@ -14,7 +14,7 @@ import AdminSupport from "./AdminSupport.jsx";
 const TABS = {
   home: {
     label: "📋 Resumen",
-    component: <AdminHome />,
+    component: <AdminHome client:load />,
     icon: "🏠",
   },
   orders: {
