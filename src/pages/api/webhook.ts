@@ -39,7 +39,7 @@ export const POST: APIRoute = async ({ request }) => {
     const { data: lineItems = [] } =
       await stripe.checkout.sessions.listLineItems(session.id, {
         limit: 100,
-        expand: ["data.price.product"],
+        expand: ["data", "data.price.product"],
       });
 
     console.log("🧾 Line items recibidos:", lineItems);
