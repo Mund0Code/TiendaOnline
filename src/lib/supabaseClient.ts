@@ -14,15 +14,28 @@ if (!supabaseUrl || !supabaseAnonKey) {
 // Variable global para almacenar la instancia única
 let supabaseInstance: SupabaseClient | null = null;
 
+// Clave única de storage basada en la URL para evitar conflictos
+const STORAGE_KEY = `supabase.auth.token.${btoa(supabaseUrl).slice(0, 8)}`;
+
 // Función para obtener o crear la instancia única de Supabase
 function getSupabaseClient(): SupabaseClient {
+  // Verificar si ya existe una instancia en el contexto global
+  if (typeof window !== "undefined") {
+    // @ts-ignore - Agregar al window para asegurar singularidad global
+    if (window.__supabaseClient) {
+      return window.__supabaseClient;
+    }
+  }
+
   if (!supabaseInstance) {
     supabaseInstance = createClient(supabaseUrl, supabaseAnonKey, {
       auth: {
         persistSession: true,
         autoRefreshToken: true,
         detectSessionInUrl: false, // Importante para evitar conflictos en Astro
-        storageKey: "supabase.auth.token", // Clave única para el storage
+        storageKey: STORAGE_KEY, // Clave única basada en la URL
+        storage:
+          typeof window !== "undefined" ? window.localStorage : undefined,
       },
       realtime: {
         params: {
@@ -33,9 +46,16 @@ function getSupabaseClient(): SupabaseClient {
       global: {
         headers: {
           "X-Client-Info": "supabase-js-astro",
+          "X-Client-Version": "1.0.0",
         },
       },
     });
+
+    // Guardar en el contexto global del navegador
+    if (typeof window !== "undefined") {
+      // @ts-ignore
+      window.__supabaseClient = supabaseInstance;
+    }
   }
   return supabaseInstance;
 }
@@ -59,7 +79,6 @@ export type Database = {
           full_name: string | null;
           is_admin: boolean;
           created_at: string;
-          updated_at: string;
         };
         Insert: {
           id: string;
@@ -67,7 +86,6 @@ export type Database = {
           full_name?: string | null;
           is_admin?: boolean;
           created_at?: string;
-          updated_at?: string;
         };
         Update: {
           id?: string;
@@ -75,7 +93,6 @@ export type Database = {
           full_name?: string | null;
           is_admin?: boolean;
           created_at?: string;
-          updated_at?: string;
         };
       };
       products: {
@@ -88,7 +105,6 @@ export type Database = {
           category_id: string | null;
           stock: number;
           created_at: string;
-          updated_at: string;
         };
         Insert: {
           id?: string;
@@ -99,7 +115,6 @@ export type Database = {
           category_id?: string | null;
           stock?: number;
           created_at?: string;
-          updated_at?: string;
         };
         Update: {
           id?: string;
@@ -110,7 +125,6 @@ export type Database = {
           category_id?: string | null;
           stock?: number;
           created_at?: string;
-          updated_at?: string;
         };
       };
       orders: {
@@ -120,7 +134,6 @@ export type Database = {
           checkout_session_id: string;
           invoice_url: string | null;
           created_at: string;
-          updated_at: string;
         };
         Insert: {
           id?: string;
@@ -128,7 +141,6 @@ export type Database = {
           checkout_session_id: string;
           invoice_url?: string | null;
           created_at?: string;
-          updated_at?: string;
         };
         Update: {
           id?: string;
@@ -136,7 +148,6 @@ export type Database = {
           checkout_session_id?: string;
           invoice_url?: string | null;
           created_at?: string;
-          updated_at?: string;
         };
       };
       categories: {
@@ -145,21 +156,18 @@ export type Database = {
           name: string;
           description: string | null;
           created_at: string;
-          updated_at: string;
         };
         Insert: {
           id?: string;
           name: string;
           description?: string | null;
           created_at?: string;
-          updated_at?: string;
         };
         Update: {
           id?: string;
           name?: string;
           description?: string | null;
           created_at?: string;
-          updated_at?: string;
         };
       };
     };

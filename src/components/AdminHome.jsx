@@ -202,30 +202,26 @@ export default function AdminHome() {
         });
       }
 
-      // Obtener productos recientes con query corregida
+      // Obtener productos recientes (últimos 7 días) - SIN updated_at
       const { data: recentProducts, error: productsError } = await supabase
         .from("products")
-        .select("id, name, created_at, updated_at")
-        .gte("updated_at", sevenDaysAgo)
-        .order("updated_at", { ascending: false })
+        .select("id, name, created_at")
+        .gte("created_at", sevenDaysAgo)
+        .order("created_at", { ascending: false })
         .limit(3);
 
       if (productsError) {
         console.warn("⚠️ Error cargando productos recientes:", productsError);
       } else if (recentProducts) {
         recentProducts.forEach((product) => {
-          const createdTime = new Date(product.created_at).getTime();
-          const updatedTime = new Date(product.updated_at).getTime();
-          const isNew = Math.abs(createdTime - updatedTime) < 1000; // Diferencia menor a 1 segundo
-
           activities.push({
             id: `product-${product.id}`,
             icon: "📦",
-            title: isNew ? "Producto creado" : "Producto actualizado",
+            title: "Producto creado",
             description: product.name,
-            time: getTimeAgo(product.updated_at),
+            time: getTimeAgo(product.created_at),
             color: "orange",
-            timestamp: new Date(product.updated_at),
+            timestamp: new Date(product.created_at),
           });
         });
       }
