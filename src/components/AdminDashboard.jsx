@@ -182,31 +182,6 @@ export default function AdminDashboard() {
 
       {/* Contenido principal */}
       <main className="lg:ml-72 min-h-screen">
-        {/* Header superior */}
-        <header className="bg-white/80 backdrop-blur-xl border-b border-gray-200/50 shadow-sm">
-          <div className="px-6 py-4 lg:px-8">
-            <div className="flex items-center justify-between">
-              <div className="ml-16 lg:ml-0">
-                <h1 className="text-2xl font-bold text-gray-900">
-                  {TABS[activeTab].label}
-                </h1>
-                <p className="text-gray-600 mt-1">
-                  Gestiona tu plataforma desde aquí
-                </p>
-              </div>
-
-              <div className="flex items-center space-x-4">
-                <div className="hidden sm:flex items-center space-x-2 bg-gray-100 rounded-full px-4 py-2">
-                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                  <span className="text-sm text-gray-600 font-medium">
-                    Online
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </header>
-
         {/* Contenido de la página */}
         <div className="p-6 lg:p-8">
           <div className="max-w-7xl mx-auto">{TABS[activeTab].component}</div>
