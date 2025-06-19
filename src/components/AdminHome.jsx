@@ -30,103 +30,103 @@ export default function AdminHome() {
   const [recentActivity, setRecentActivity] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const loadDashboardData = async () => {
-      setLoading(true);
+  const loadDashboardData = async () => {
+    setLoading(true);
 
-      try {
-        // 1) Cargar métricas globales con mejor manejo de errores
-        const [ordersCount, productsCount, usersCount, ordersData] =
-          await Promise.allSettled([
-            supabaseAdmin
-              .from("orders")
-              .select("amount_total", { count: "exact" }),
-            supabaseAdmin.from("products").select("id", { count: "exact" }),
-            supabaseAdmin.from("profiles").select("id", { count: "exact" }),
-            supabaseAdmin.from("orders").select("amount_total"),
-          ]);
+    try {
+      // 1) Cargar métricas globales con mejor manejo de errores
+      const [ordersCount, productsCount, usersCount, ordersData] =
+        await Promise.allSettled([
+          supabaseAdmin
+            .from("orders")
+            .select("amount_total", { count: "exact" }),
+          supabaseAdmin.from("products").select("id", { count: "exact" }),
+          supabaseAdmin.from("profiles").select("id", { count: "exact" }),
+          supabaseAdmin.from("orders").select("amount_total"),
+        ]);
 
-        // Procesar resultados con manejo de errores
-        const totalOrders =
-          ordersCount.status === "fulfilled" ? ordersCount.value.count || 0 : 0;
-        const totalProducts =
-          productsCount.status === "fulfilled"
-            ? productsCount.value.count || 0
-            : 0;
-        const totalClients =
-          usersCount.status === "fulfilled" ? usersCount.value.count || 0 : 0;
+      // Procesar resultados con manejo de errores
+      const totalOrders =
+        ordersCount.status === "fulfilled" ? ordersCount.value.count || 0 : 0;
+      const totalProducts =
+        productsCount.status === "fulfilled"
+          ? productsCount.value.count || 0
+          : 0;
+      const totalClients =
+        usersCount.status === "fulfilled" ? usersCount.value.count || 0 : 0;
 
-        const totalIncome =
-          ordersData.status === "fulfilled" && ordersData.value.data
-            ? ordersData.value.data.reduce(
-                (sum, o) => sum + Number(o.amount_total || 0),
-                0
-              )
-            : 0;
+      const totalIncome =
+        ordersData.status === "fulfilled" && ordersData.value.data
+          ? ordersData.value.data.reduce(
+              (sum, o) => sum + Number(o.amount_total || 0),
+              0
+            )
+          : 0;
 
-        setStats({
-          totalIncome: totalIncome.toFixed(2),
-          totalOrders,
-          totalProducts,
-          totalClients,
-        });
+      setStats({
+        totalIncome: totalIncome.toFixed(2),
+        totalOrders,
+        totalProducts,
+        totalClients,
+      });
 
-        // 2) Datos de ventas últimos 7 días con mejor formato de fecha
-        const days = Array.from({ length: 7 }).map((_, i) => {
-          const d = new Date();
-          d.setDate(d.getDate() - (6 - i));
-          d.setHours(0, 0, 0, 0); // Resetear horas para comparación exacta
-          return d.toISOString();
-        });
+      // 2) Datos de ventas últimos 7 días con mejor formato de fecha
+      const days = Array.from({ length: 7 }).map((_, i) => {
+        const d = new Date();
+        d.setDate(d.getDate() - (6 - i));
+        d.setHours(0, 0, 0, 0); // Resetear horas para comparación exacta
+        return d.toISOString();
+      });
 
-        const sevenDaysAgo = new Date();
-        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-        sevenDaysAgo.setHours(0, 0, 0, 0);
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+      sevenDaysAgo.setHours(0, 0, 0, 0);
 
-        const { data: salesData, error: salesError } = await supabaseAdmin
-          .from("orders")
-          .select("amount_total, created_at")
-          .gte("created_at", sevenDaysAgo.toISOString());
+      const { data: salesData, error: salesError } = await supabaseAdmin
+        .from("orders")
+        .select("amount_total, created_at")
+        .gte("created_at", sevenDaysAgo.toISOString());
 
-        if (salesError) {
-          console.error("❌ Error cargando datos de ventas:", salesError);
-        }
-
-        const grouped = days.map((dateISO) => {
-          const date = new Date(dateISO);
-          const dayName = date.toLocaleDateString("es-ES", {
-            weekday: "short",
-          });
-          const dayStart = new Date(date);
-          dayStart.setHours(0, 0, 0, 0);
-          const dayEnd = new Date(date);
-          dayEnd.setHours(23, 59, 59, 999);
-
-          const dayTotal =
-            salesData
-              ?.filter((o) => {
-                const orderDate = new Date(o.created_at);
-                return orderDate >= dayStart && orderDate <= dayEnd;
-              })
-              .reduce((sum, o) => sum + Number(o.amount_total || 0), 0) || 0;
-
-          return {
-            date: dayName,
-            total: Math.round(dayTotal * 100) / 100, // Redondear a 2 decimales
-          };
-        });
-
-        setChartData(grouped);
-
-        // 3) Cargar actividad reciente
-        await loadRecentActivity();
-      } catch (error) {
-        console.error("❌ Error cargando datos del dashboard:", error);
-      } finally {
-        setLoading(false);
+      if (salesError) {
+        console.error("❌ Error cargando datos de ventas:", salesError);
       }
-    };
 
+      const grouped = days.map((dateISO) => {
+        const date = new Date(dateISO);
+        const dayName = date.toLocaleDateString("es-ES", {
+          weekday: "short",
+        });
+        const dayStart = new Date(date);
+        dayStart.setHours(0, 0, 0, 0);
+        const dayEnd = new Date(date);
+        dayEnd.setHours(23, 59, 59, 999);
+
+        const dayTotal =
+          salesData
+            ?.filter((o) => {
+              const orderDate = new Date(o.created_at);
+              return orderDate >= dayStart && orderDate <= dayEnd;
+            })
+            .reduce((sum, o) => sum + Number(o.amount_total || 0), 0) || 0;
+
+        return {
+          date: dayName,
+          total: Math.round(dayTotal * 100) / 100, // Redondear a 2 decimales
+        };
+      });
+
+      setChartData(grouped);
+
+      // 3) Cargar actividad reciente
+      await loadRecentActivity();
+    } catch (error) {
+      console.error("❌ Error cargando datos del dashboard:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
     loadDashboardData();
   }, []);
 
