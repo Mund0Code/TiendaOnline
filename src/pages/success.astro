@@ -113,6 +113,91 @@ if (session) {
     console.log("✅ Orden encontrada en BD:", order.id);
   } else {
     console.log("⚠️ Sesión existe en Stripe pero no hay orden en BD");
+
+    // Crear orden automáticamente si el pago está completo
+    if (session.payment_status === "paid") {
+      console.log("💡 Creando orden automáticamente...");
+
+      try {
+        // Obtener información del usuario desde la sesión o metadata
+        const userId = session.metadata?.user_id || null;
+
+        // Crear la orden
+        const { data: newOrder, error: createError } = await supabaseAdmin
+          .from("orders")
+          .insert({
+            checkout_session_id: sessionId,
+            amount_total: session.amount_total / 100, // Stripe usa centavos
+            user_id: userId,
+            stripe_payment_intent_id: session.payment_intent,
+            status: "completed",
+          })
+          .select(
+            `
+            id, 
+            amount_total, 
+            invoice_url, 
+            checkout_session_id,
+            created_at,
+            user_id,
+            status
+          `
+          )
+          .single();
+
+        if (createError) {
+          console.error("❌ Error creando orden automática:", createError);
+        } else {
+          console.log("✅ Orden creada automáticamente:", newOrder.id);
+
+          // Buscar el perfil del usuario para completar la información
+          if (userId) {
+            const { data: profile } = await supabaseAdmin
+              .from("profiles")
+              .select("email, full_name")
+              .eq("id", userId)
+              .single();
+
+            if (profile) {
+              newOrder.profiles = profile;
+            }
+          }
+
+          dbOrder = newOrder;
+
+          // Crear los items de la orden basados en line_items de Stripe
+          if (session.line_items?.data) {
+            const orderItems = session.line_items.data.map((lineItem) => {
+              const product = lineItem.price.product;
+              return {
+                order_id: newOrder.id,
+                product_id: product.metadata?.product_id || null, // Si tienes el ID en metadata
+                quantity: lineItem.quantity,
+                price: lineItem.price.unit_amount / 100,
+                product_name: product.name,
+                product_description: product.description,
+              };
+            });
+
+            // Insertar items de la orden
+            const { error: itemsError } = await supabaseAdmin
+              .from("order_items")
+              .insert(orderItems);
+
+            if (itemsError) {
+              console.error("⚠️ Error creando items de orden:", itemsError);
+            } else {
+              console.log("✅ Items de orden creados");
+            }
+          }
+        }
+      } catch (createOrderError) {
+        console.error(
+          "❌ Error en creación automática de orden:",
+          createOrderError
+        );
+      }
+    }
   }
 }
 
@@ -458,27 +543,37 @@ const hasPaymentData = totalAmount > 0 && productDetails.length > 0;
                       Descargar Factura
                     </a>
                   ) : dbOrder ? (
-                    <InvoiceButton client:load orderId={dbOrder.id} />
+                    <div class="space-y-2">
+                      <InvoiceButton client:load orderId={dbOrder.id} />
+                      <p class="text-xs text-gray-500">
+                        Factura lista para generar
+                      </p>
+                    </div>
                   ) : (
-                    <button
-                      disabled
-                      class="inline-flex items-center px-6 py-3 bg-gray-300 text-gray-500 rounded-lg cursor-not-allowed font-medium w-full justify-center"
-                    >
-                      <svg
-                        class="w-5 h-5 mr-2"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
+                    <div class="space-y-2">
+                      <button
+                        disabled
+                        class="inline-flex items-center px-6 py-3 bg-gray-300 text-gray-500 rounded-lg cursor-not-allowed font-medium w-full justify-center"
                       >
-                        <path
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                          stroke-width="2"
-                          d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                        />
-                      </svg>
-                      Factura Pendiente
-                    </button>
+                        <svg
+                          class="w-5 h-5 mr-2"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                          />
+                        </svg>
+                        Procesando...
+                      </button>
+                      <p class="text-xs text-gray-500">
+                        Disponible en unos minutos
+                      </p>
+                    </div>
                   )}
                 </div>
 
