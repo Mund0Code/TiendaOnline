@@ -2,8 +2,6 @@
 import type { APIRoute } from "astro";
 import { Stripe } from "stripe";
 import { supabaseAdmin } from "../../lib/supabaseAdminClient";
-
-// Si usas uuid
 import { v4 as uuidv4 } from "uuid";
 
 const stripe = new Stripe(import.meta.env.STRIPE_SECRET_KEY, {
@@ -17,14 +15,14 @@ export const POST: APIRoute = async ({ request }) => {
       customerId: string;
     };
 
-    if (!items || !items.length || !customerId) {
+    if (!items?.length || !customerId) {
       return new Response(
         JSON.stringify({ error: "Datos incompletos del pedido" }),
         { status: 400 }
       );
     }
 
-    // 1. Prepara los items para Stripe
+    // 1. Prepara line_items para Stripe
     const line_items = items.map((item) => ({
       price_data: {
         currency: "eur",
@@ -34,13 +32,13 @@ export const POST: APIRoute = async ({ request }) => {
       quantity: item.quantity,
     }));
 
-    // 2. Crea sesión de pago en Stripe
+    // 2. Crea la sesión en Stripe
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ["card"],
       line_items,
       mode: "payment",
       client_reference_id: customerId,
-      metadata: { product_id: items[0].id }, // solo si es uno
+      metadata: { product_id: items[0].id },
       success_url: `${import.meta.env.PUBLIC_SITE_URL}/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${import.meta.env.PUBLIC_SITE_URL}/cart`,
     });
@@ -57,19 +55,18 @@ export const POST: APIRoute = async ({ request }) => {
         id: uuidv4(),
         customer_id: customerId,
         name: items.map((i) => i.name).join(", "),
-        customer_email: null, // opcional
         amount_total,
         status: "pending",
         downloaded: false,
         invoice_downloaded: false,
-        product_id: items[0].id, // solo si uno
+        product_id: items[0].id,
         checkout_session_id: session.id,
         created_at: new Date().toISOString(),
       },
     ]);
 
     if (insertError) {
-      console.error("❌ Error insertando pedido:", insertError);
+      console.error("❌ Error insertando pedido en Supabase:", insertError);
       return new Response(
         JSON.stringify({ error: "No se pudo guardar el pedido" }),
         { status: 500 }
