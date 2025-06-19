@@ -3,20 +3,22 @@ import BaseLayout from "../layouts/Layout.astro";
 import ProductCard from "../components/ProductCard.jsx";
 import { supabase } from "../lib/supabaseClient";
 
-const perPage = 20;
+const perPage = 12; // Reducido para mejor UX
 const page = Math.max(
   1,
   parseInt(Astro.url.searchParams.get("page") || "1", 10)
 );
+const search = Astro.url.searchParams.get("search") || "";
+const category = Astro.url.searchParams.get("category") || "";
+const sortBy = Astro.url.searchParams.get("sort") || "newest";
+const minPrice = parseFloat(Astro.url.searchParams.get("minPrice") || "0");
+const maxPrice = parseFloat(Astro.url.searchParams.get("maxPrice") || "999999");
+
 const from = (page - 1) * perPage;
 const to = from + perPage - 1;
 
-// 1) Traemos los productos (incluyendo descripción) y el conteo total
-const {
-  data: products = [],
-  count,
-  error,
-} = await supabase
+// Construir query dinámicamente
+let query = supabase
   .from("products")
   .select(
     `
@@ -25,35 +27,316 @@ const {
     description,
     price,
     image_url,
-    category:categories(name)
+    created_at,
+    category:categories(id, name)
   `,
     { count: "exact" }
-  )
-  .order("created_at", { ascending: false })
-  .range(from, to);
+  );
+
+// Aplicar filtros
+if (search) {
+  query = query.or(`name.ilike.%${search}%, description.ilike.%${search}%`);
+}
+
+if (category) {
+  query = query.eq("category_id", category);
+}
+
+if (minPrice > 0 || maxPrice < 999999) {
+  query = query.gte("price", minPrice).lte("price", maxPrice);
+}
+
+// Aplicar ordenación
+switch (sortBy) {
+  case "price_asc":
+    query = query.order("price", { ascending: true });
+    break;
+  case "price_desc":
+    query = query.order("price", { ascending: false });
+    break;
+  case "name":
+    query = query.order("name", { ascending: true });
+    break;
+  case "oldest":
+    query = query.order("created_at", { ascending: true });
+    break;
+  default: // newest
+    query = query.order("created_at", { ascending: false });
+}
+
+// Ejecutar query con paginación
+const {
+  data: products = [],
+  count,
+  error,
+} = await query.range(from, to);
+
+// Obtener categorías para el filtro
+const { data: categories = [] } = await supabase
+  .from("categories")
+  .select("id, name")
+  .order("name");
+
+// Obtener estadísticas para mostrar
+const { data: stats } = await supabase
+  .from("products")
+  .select("price")
+  .not("price", "is", null);
+
+const priceStats = stats ? {
+  min: Math.min(...stats.map(p => p.price)),
+  max: Math.max(...stats.map(p => p.price)),
+  avg: stats.reduce((sum, p) => sum + p.price, 0) / stats.length
+} : { min: 0, max: 100, avg: 50 };
 
 const total = count ?? 0;
 const totalPages = Math.ceil(total / perPage);
+
+// Helper para construir URLs con parámetros
+function buildUrl(params: Record<string, string | number>) {
+  const urlParams = new URLSearchParams();
+  
+  // Mantener parámetros existentes
+  if (search) urlParams.set("search", search);
+  if (category) urlParams.set("category", category);
+  if (sortBy !== "newest") urlParams.set("sort", sortBy);
+  if (minPrice > 0) urlParams.set("minPrice", minPrice.toString());
+  if (maxPrice < 999999) urlParams.set("maxPrice", maxPrice.toString());
+  
+  // Aplicar nuevos parámetros
+  Object.entries(params).forEach(([key, value]) => {
+    if (value) {
+      urlParams.set(key, value.toString());
+    } else {
+      urlParams.delete(key);
+    }
+  });
+  
+  const queryString = urlParams.toString();
+  return queryString ? `/?${queryString}` : "/";
+}
 ---
 
 <BaseLayout title="Nuestra Tienda">
-  <section class="max-w-7xl mt-24 mx-auto py-12 px-4 sm:px-6 lg:px-8">
-    <header class="mb-8 text-center">
-      <h1 class="text-4xl font-extrabold text-gray-900">
-        Nuestra Colección de Libros
-      </h1>
-      <p class="mt-2 text-gray-600">Explora y elige tu próxima lectura</p>
-    </header>
+  <!-- Hero Section -->
+  <section class="bg-gradient-to-r from-blue-600 via-purple-600 to-indigo-600 text-white">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-32 pb-16">
+      <div class="text-center">
+        <h1 class="text-5xl md:text-6xl font-bold mb-4">
+          Descubre Tu Próxima
+          <span class="text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-pink-400">
+            Gran Lectura
+          </span>
+        </h1>
+        <p class="text-xl text-blue-100 mb-8 max-w-2xl mx-auto">
+          Explora nuestra colección curada de libros digitales de alta calidad, 
+          desde programación hasta diseño y emprendimiento.
+        </p>
+        <div class="flex flex-col sm:flex-row gap-4 justify-center items-center">
+          <div class="flex items-center text-blue-100">
+            <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
+              <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+            {total} productos disponibles
+          </div>
+          <div class="flex items-center text-blue-100">
+            <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
+              <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3z"></path>
+            </svg>
+            Más de 1000 clientes satisfechos
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Filtros y Búsqueda -->
+  <section class="bg-white shadow-sm border-b">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      <form method="GET" class="space-y-6">
+        <!-- Búsqueda principal -->
+        <div class="relative max-w-2xl mx-auto">
+          <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+            <svg class="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+          </div>
+          <input
+            type="text"
+            name="search"
+            value={search}
+            placeholder="Buscar por título, descripción o tema..."
+            class="block w-full pl-12 pr-4 py-4 border border-gray-300 rounded-xl leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-lg"
+          />
+          <button
+            type="submit"
+            class="absolute inset-y-0 right-0 px-6 py-2 bg-blue-600 text-white rounded-r-xl hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+          >
+            Buscar
+          </button>
+        </div>
+
+        <!-- Filtros avanzados -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <!-- Categoría -->
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-2">Categoría</label>
+            <select 
+              name="category" 
+              class="block w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+            >
+              <option value="">Todas las categorías</option>
+              {categories?.map((cat) => (
+                <option value={cat.id} selected={category === cat.id.toString()}>
+                  {cat.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <!-- Precio mínimo -->
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-2">
+              Precio mínimo (€{priceStats.min.toFixed(0)}-€{priceStats.max.toFixed(0)})
+            </label>
+            <input
+              type="number"
+              name="minPrice"
+              value={minPrice > 0 ? minPrice : ""}
+              min={priceStats.min}
+              max={priceStats.max}
+              step="0.01"
+              placeholder={`Desde €${priceStats.min.toFixed(0)}`}
+              class="block w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            />
+          </div>
+
+          <!-- Precio máximo -->
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-2">Precio máximo</label>
+            <input
+              type="number"
+              name="maxPrice"
+              value={maxPrice < 999999 ? maxPrice : ""}
+              min={priceStats.min}
+              max={priceStats.max}
+              step="0.01"
+              placeholder={`Hasta €${priceStats.max.toFixed(0)}`}
+              class="block w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            />
+          </div>
+
+          <!-- Ordenar por -->
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-2">Ordenar por</label>
+            <select 
+              name="sort" 
+              class="block w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+            >
+              <option value="newest" selected={sortBy === "newest"}>Más recientes</option>
+              <option value="oldest" selected={sortBy === "oldest"}>Más antiguos</option>
+              <option value="price_asc" selected={sortBy === "price_asc"}>Precio: menor a mayor</option>
+              <option value="price_desc" selected={sortBy === "price_desc"}>Precio: mayor a menor</option>
+              <option value="name" selected={sortBy === "name"}>Nombre A-Z</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Botones de acción -->
+        <div class="flex flex-col sm:flex-row gap-3 justify-center">
+          <button
+            type="submit"
+            class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors font-medium"
+          >
+            Aplicar filtros
+          </button>
+          <a
+            href="/"
+            class="px-6 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500 transition-colors font-medium text-center"
+          >
+            Limpiar filtros
+          </a>
+        </div>
+      </form>
+    </div>
+  </section>
+
+  <!-- Resultados y productos -->
+  <section class="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
+    <!-- Estadísticas de resultados -->
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-8">
+      <div class="mb-4 sm:mb-0">
+        <h2 class="text-2xl font-bold text-gray-900">
+          {search ? `Resultados para "${search}"` : "Todos los productos"}
+        </h2>
+        <p class="text-gray-600">
+          {total === 0 ? "No se encontraron productos" : 
+           total === 1 ? "1 producto encontrado" : 
+           `${total} productos encontrados`}
+          {category && ` en ${categories?.find(c => c.id.toString() === category)?.name || "esta categoría"}`}
+        </p>
+      </div>
+      
+      {total > 0 && (
+        <div class="flex items-center space-x-2 text-sm text-gray-500">
+          <span>Precio promedio: €{priceStats.avg.toFixed(2)}</span>
+        </div>
+      )}
+    </div>
 
     {
       error ? (
-        <div class="bg-red-50 border border-red-200 text-red-800 p-4 rounded-md mb-6">
-          <p class="font-medium">¡Uy! No pudimos cargar los productos.</p>
-          <p class="text-sm">Inténtalo de nuevo más tarde.</p>
+        <div class="bg-red-50 border border-red-200 text-red-800 p-6 rounded-xl mb-6">
+          <div class="flex items-center">
+            <svg class="w-5 h-5 mr-3 text-red-600" fill="currentColor" viewBox="0 0 20 20">
+              <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"></path>
+            </svg>
+            <div>
+              <p class="font-medium">¡Ups! No pudimos cargar los productos.</p>
+              <p class="text-sm mt-1">Por favor, inténtalo de nuevo más tarde o contacta a soporte.</p>
+            </div>
+          </div>
+        </div>
+      ) : total === 0 ? (
+        <div class="text-center py-12">
+          <svg class="mx-auto h-16 w-16 text-gray-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M9.172 16.172a4 4 0 015.656 0M9 12h6m-6-4h6m2 5.291A7.962 7.962 0 0112 15c-2.34 0-4.529-.901-6.172-2.379M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path>
+          </svg>
+          <h3 class="text-xl font-medium text-gray-900 mb-2">No se encontraron productos</h3>
+          <p class="text-gray-600 mb-6">
+            {search ? 
+              `No hay productos que coincidan con "${search}". Intenta con otros términos de búsqueda.` :
+              "No hay productos disponibles con los filtros seleccionados."
+            }
+          </p>
+          <div class="space-y-3">
+            <a
+              href="/"
+              class="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              Ver todos los productos
+            </a>
+            {search && (
+              <div>
+                <p class="text-sm text-gray-500 mb-2">Sugerencias:</p>
+                <div class="flex flex-wrap gap-2 justify-center">
+                  {categories?.slice(0, 4).map((cat) => (
+                    <a
+                      href={buildUrl({ category: cat.id.toString(), search: "", page: 1 })}
+                      class="px-3 py-1 bg-gray-100 text-gray-700 rounded-full text-sm hover:bg-gray-200 transition-colors"
+                    >
+                      {cat.name}
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       ) : (
         <>
-          <div class="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          <!-- Grid de productos -->
+          <div class="grid gap-8 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {products?.map((p) => (
               <ProductCard
                 client:load
@@ -63,49 +346,115 @@ const totalPages = Math.ceil(total / perPage);
                   description: p.description,
                   price: p.price,
                   image_url: p.image_url,
-                  category: p.category, // <-- pasamos el objeto category
+                  category: p.category,
                 }}
               />
             ))}
           </div>
 
+          <!-- Paginación mejorada -->
           {totalPages > 1 && (
-            <nav class="mt-12 flex justify-center items-center space-x-4">
-              {page > 1 ? (
-                <a
-                  href={`/?page=${page - 1}`}
-                  class="px-4 py-2 bg-white border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 transition"
-                >
-                  ← Anterior
-                </a>
-              ) : (
-                <button
-                  class="px-4 py-2 bg-gray-100 border border-gray-200 rounded-md text-gray-400 cursor-not-allowed"
-                  disabled
-                >
-                  ← Anterior
-                </button>
-              )}
+            <nav class="mt-12 flex flex-col sm:flex-row justify-between items-center space-y-4 sm:space-y-0">
+              <!-- Info de página -->
+              <div class="text-sm text-gray-700">
+                Mostrando <strong>{from + 1}</strong> a <strong>{Math.min(to + 1, total)}</strong> de <strong>{total}</strong> productos
+              </div>
 
-              <span class="text-gray-700">
-                Página <strong>{page}</strong> de <strong>{totalPages}</strong>
-              </span>
+              <!-- Controles de paginación -->
+              <div class="flex items-center space-x-2">
+                <!-- Primera página -->
+                {page > 2 && (
+                  <a
+                    href={buildUrl({ page: 1 })}
+                    class="px-3 py-2 text-sm bg-white border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 transition"
+                  >
+                    1
+                  </a>
+                )}
+                
+                {page > 3 && (
+                  <span class="px-2 text-gray-500">...</span>
+                )}
 
-              {page < totalPages ? (
-                <a
-                  href={`/?page=${page + 1}`}
-                  class="px-4 py-2 bg-white border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 transition"
-                >
-                  Siguiente →
-                </a>
-              ) : (
-                <button
-                  class="px-4 py-2 bg-gray-100 border border-gray-200 rounded-md text-gray-400 cursor-not-allowed"
-                  disabled
-                >
-                  Siguiente →
-                </button>
-              )}
+                <!-- Página anterior -->
+                {page > 1 ? (
+                  <a
+                    href={buildUrl({ page: page - 1 })}
+                    class="px-4 py-2 bg-white border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 transition flex items-center"
+                  >
+                    <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+                    </svg>
+                    Anterior
+                  </a>
+                ) : (
+                  <button
+                    class="px-4 py-2 bg-gray-100 border border-gray-200 rounded-md text-gray-400 cursor-not-allowed flex items-center"
+                    disabled
+                  >
+                    <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+                    </svg>
+                    Anterior
+                  </button>
+                )}
+
+                <!-- Página actual -->
+                <span class="px-4 py-2 bg-blue-600 text-white rounded-md font-medium">
+                  {page}
+                </span>
+
+                <!-- Página siguiente -->
+                {page < totalPages ? (
+                  <a
+                    href={buildUrl({ page: page + 1 })}
+                    class="px-4 py-2 bg-white border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 transition flex items-center"
+                  >
+                    Siguiente
+                    <svg class="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                    </svg>
+                  </a>
+                ) : (
+                  <button
+                    class="px-4 py-2 bg-gray-100 border border-gray-200 rounded-md text-gray-400 cursor-not-allowed flex items-center"
+                    disabled
+                  >
+                    Siguiente
+                    <svg class="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                    </svg>
+                  </button>
+                )}
+
+                {page < totalPages - 2 && (
+                  <span class="px-2 text-gray-500">...</span>
+                )}
+
+                <!-- Última página -->
+                {page < totalPages - 1 && (
+                  <a
+                    href={buildUrl({ page: totalPages })}
+                    class="px-3 py-2 text-sm bg-white border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 transition"
+                  >
+                    {totalPages}
+                  </a>
+                )}
+              </div>
+
+              <!-- Ir a página -->
+              <div class="hidden sm:flex items-center space-x-2">
+                <label for="pageJump" class="text-sm text-gray-700">Ir a:</label>
+                <input
+                  id="pageJump"
+                  type="number"
+                  min="1"
+                  max={totalPages}
+                  value={page}
+                  class="w-16 px-2 py-1 border border-gray-300 rounded text-center text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  onchange={`window.location.href = '${buildUrl({ page: 0 }).replace('page=0', 'page=')}' + this.value`}
+                />
+              </div>
             </nav>
           )}
         </>
