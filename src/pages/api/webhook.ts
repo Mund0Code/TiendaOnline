@@ -35,21 +35,23 @@ export const POST: APIRoute = async ({ request }) => {
   if (event.type === "checkout.session.completed") {
     const session = event.data.object as Stripe.Checkout.Session;
 
-    // A) Recuperar line items con product expandido
+    // A) Recuperar line items con producto expandido
     const { data: lineItems = [] } =
       await stripe.checkout.sessions.listLineItems(session.id, {
         limit: 100,
         expand: ["data.price.product"],
       });
 
+    console.log("🧾 Line items recibidos:", lineItems);
+
     // B) Construir el campo `name` uniendo todos los nombres
     const itemNames = lineItems.map((li) => {
       const prod = (li.price as any).product as Stripe.Product;
-      return prod.name ?? li.description ?? "Producto";
+      return prod?.name ?? li.description ?? "Producto";
     });
     const name = itemNames.join(", ");
 
-    // C) Insertar la orden y capturar su ID
+    // C) Insertar la orden
     const amount = (session.amount_total ?? 0) / 100;
     const { data: insertedOrder, error: orderErr } = await supabaseAdmin
       .from("orders")
@@ -60,23 +62,26 @@ export const POST: APIRoute = async ({ request }) => {
         amount_total: amount,
         status: "paid",
         name,
+        created_at: new Date().toISOString(),
       })
-      .select() // para devolver el objeto insertado
-      .single(); // un solo registro
+      .select()
+      .single();
 
     if (orderErr || !insertedOrder) {
-      console.error("Error creating order:", orderErr);
+      console.error("❌ Error creating order:", orderErr);
       return new Response("Error creating order", { status: 500 });
     }
 
-    // D) Para cada line item, buscamos el UUID real de tu tabla products
+    console.log("✅ Orden insertada:", insertedOrder);
+
+    // D) Para cada item, buscamos el producto y creamos la relación
     const itemsToInsert = [];
+
     for (const li of lineItems) {
       const stripeProdId = (li.price as any).product?.id as string;
       const unitAmount = (li.price as any).unit_amount ?? 0;
       const quantity = li.quantity ?? 1;
 
-      // Verifica si existe un producto con ese stripe_product_id
       const { data: prodRec, error: prodErr } = await supabaseAdmin
         .from("products")
         .select("id")
@@ -85,7 +90,8 @@ export const POST: APIRoute = async ({ request }) => {
 
       if (prodErr || !prodRec) {
         console.warn(
-          `⚠️ No encuentro producto DB para Stripe ID ${stripeProdId}`
+          `⚠️ Producto no encontrado en DB para Stripe ID: ${stripeProdId}`,
+          prodErr
         );
         continue;
       }
@@ -98,22 +104,23 @@ export const POST: APIRoute = async ({ request }) => {
       });
     }
 
-    console.log(
-      `✅ Order ${insertedOrder.id} + ${itemsToInsert.length} items created`
-    );
+    console.log("📦 itemsToInsert:", itemsToInsert);
 
-    console.log("🧾 order_items to insert:", itemsToInsert);
-
-    if (itemsToInsert.length) {
+    if (itemsToInsert.length > 0) {
       const { error: itemsErr } = await supabaseAdmin
         .from("order_items")
         .insert(itemsToInsert);
 
       if (itemsErr) {
-        console.error("❌ Error creating order_items:", itemsErr);
-      } else {
-        console.log("✅ Order items inserted correctly");
+        console.error("❌ Error al insertar order_items:", itemsErr);
+        return new Response("Error creating order items", { status: 500 });
       }
+
+      console.log(`✅ ${itemsToInsert.length} order_items insertados`);
+    } else {
+      console.warn(
+        "⚠️ No se insertó ningún order_item porque no se encontraron productos."
+      );
     }
   }
 
