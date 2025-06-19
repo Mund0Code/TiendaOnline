@@ -1,4 +1,4 @@
-// ✅ webhook.ts - versión simple para debug
+// ✅ webhook.ts - versión completa
 import type { APIRoute } from "astro";
 import { Stripe } from "stripe";
 import { supabaseAdmin } from "../../lib/supabaseAdminClient";
@@ -15,18 +15,10 @@ const stripe = new Stripe(import.meta.env.STRIPE_SECRET_KEY!, {
 const endpointSecret = import.meta.env.STRIPE_WEBHOOK_SECRET!;
 
 export const POST: APIRoute = async ({ request }) => {
-  // LOG BÁSICO - ESTO DEBE APARECER SIEMPRE
   console.log("🚀 WEBHOOK EJECUTÁNDOSE - timestamp:", new Date().toISOString());
-  console.log(
-    "🔗 Headers recibidos:",
-    Object.fromEntries(request.headers.entries())
-  );
 
   const buf = await request.arrayBuffer();
   const sig = request.headers.get("stripe-signature")!;
-
-  console.log("📝 Signature recibida:", sig ? "✅ SÍ" : "❌ NO");
-  console.log("📦 Body size:", buf.byteLength, "bytes");
 
   let event: Stripe.Event;
   try {
@@ -52,18 +44,84 @@ export const POST: APIRoute = async ({ request }) => {
       amount_total: session.amount_total,
     });
 
-    // CREAR ORDEN BÁSICA PRIMERO
+    // 1. Obtener line items
+    const { data: lineItems = [] } =
+      await stripe.checkout.sessions.listLineItems(session.id, {
+        limit: 100,
+        expand: ["data", "data.price.product"],
+      });
+
+    console.log("🧾 Line items obtenidos:", lineItems.length);
+
+    if (lineItems.length === 0) {
+      console.error("❌ No se encontraron line items");
+      return new Response("No line items found", { status: 400 });
+    }
+
+    // 2. Procesar nombres y encontrar primer producto
+    const itemNames = lineItems.map((li) => {
+      const prod = (li.price as any).product as Stripe.Product;
+      return prod?.name ?? li.description ?? "Producto";
+    });
+    const name = itemNames.join(", ");
+
+    let firstProductId = null;
+    const firstLineItem = lineItems[0];
+    const stripeProduct = (firstLineItem.price as any).product;
+    const stripeProdId =
+      typeof stripeProduct === "string" ? stripeProduct : stripeProduct?.id;
+
+    console.log("🔍 Buscando producto para Stripe ID:", stripeProdId);
+
+    if (stripeProdId) {
+      const { data: productData, error: prodSearchError } = await supabaseAdmin
+        .from("products")
+        .select("id, name, stripe_product_id")
+        .eq("stripe_product_id", stripeProdId)
+        .single();
+
+      console.log("🔍 Resultado búsqueda producto:", {
+        productData,
+        prodSearchError,
+      });
+
+      if (productData) {
+        firstProductId = productData.id;
+        console.log(
+          "✅ Producto encontrado:",
+          productData.name,
+          "ID:",
+          firstProductId
+        );
+      } else {
+        console.warn(
+          "⚠️ Producto no encontrado en DB para Stripe ID:",
+          stripeProdId
+        );
+
+        // Verificar qué productos tienes en tu DB
+        const { data: allProducts } = await supabaseAdmin
+          .from("products")
+          .select("id, name, stripe_product_id");
+
+        console.log("📋 Productos disponibles en DB:", allProducts);
+      }
+    }
+
+    // 3. Crear orden
+    const amount = (session.amount_total ?? 0) / 100;
     const orderData = {
       checkout_session_id: session.id,
       customer_id: session.client_reference_id,
       customer_email: session.customer_details?.email || "unknown",
-      amount_total: (session.amount_total ?? 0) / 100,
+      amount_total: amount,
       status: "paid",
-      name: "Test Order",
+      name,
+      product_id: firstProductId, // Agregar el product_id del primer producto
       created_at: new Date().toISOString(),
     };
 
-    console.log("📝 Insertando orden básica:", orderData);
+    console.log("📝 Insertando orden con datos:", orderData);
 
     const { data: insertedOrder, error: orderErr } = await supabaseAdmin
       .from("orders")
@@ -78,28 +136,85 @@ export const POST: APIRoute = async ({ request }) => {
 
     console.log("✅ Orden creada exitosamente:", insertedOrder);
 
-    // Ahora intentamos obtener line items
-    try {
-      const { data: lineItems = [] } =
-        await stripe.checkout.sessions.listLineItems(session.id, {
-          limit: 100,
-          expand: ["data", "data.price.product"],
-        });
+    // 4. Procesar TODOS los line items para order_items
+    const itemsToInsert = [];
 
-      console.log("🧾 Line items obtenidos:", lineItems.length);
-      console.log(
-        "🧾 Primer line item:",
-        lineItems[0] ? JSON.stringify(lineItems[0], null, 2) : "Ninguno"
-      );
+    for (let i = 0; i < lineItems.length; i++) {
+      const li = lineItems[i];
+      const stripeProduct = (li.price as any).product;
+      const stripeProdId =
+        typeof stripeProduct === "string" ? stripeProduct : stripeProduct?.id;
 
-      if (lineItems.length > 0) {
-        console.log("🔄 Procesando line items...");
-        // Aquí procesarías los line items
-      } else {
-        console.warn("⚠️ No se encontraron line items");
+      const unitAmount = (li.price as any).unit_amount ?? 0;
+      const quantity = li.quantity ?? 1;
+
+      console.log(`📦 Procesando item ${i + 1}/${lineItems.length}:`, {
+        stripeProdId,
+        unitAmount,
+        quantity,
+        description: li.description,
+      });
+
+      if (!stripeProdId) {
+        console.warn(`⚠️ Item ${i + 1} no tiene stripe_product_id`);
+        continue;
       }
-    } catch (lineItemsError) {
-      console.error("❌ Error obteniendo line items:", lineItemsError);
+
+      const { data: productData, error: prodErr } = await supabaseAdmin
+        .from("products")
+        .select("id, name, stripe_product_id")
+        .eq("stripe_product_id", stripeProdId)
+        .single();
+
+      console.log(`🔍 Búsqueda producto item ${i + 1}:`, {
+        productData,
+        prodErr,
+      });
+
+      if (prodErr || !productData) {
+        console.warn(
+          `⚠️ Producto no encontrado en DB para Stripe ID: ${stripeProdId}`,
+          prodErr
+        );
+        continue;
+      }
+
+      const itemToInsert = {
+        order_id: insertedOrder.id,
+        product_id: productData.id,
+        unit_price: unitAmount,
+        quantity,
+      };
+
+      console.log(`✅ Item ${i + 1} preparado para insertar:`, itemToInsert);
+      itemsToInsert.push(itemToInsert);
+    }
+
+    console.log("📦 Items finales para insertar:", itemsToInsert);
+
+    // 5. Insertar order_items
+    if (itemsToInsert.length > 0) {
+      const { data: insertedItems, error: itemsErr } = await supabaseAdmin
+        .from("order_items")
+        .insert(itemsToInsert)
+        .select();
+
+      if (itemsErr) {
+        console.error("❌ Error al insertar order_items:", itemsErr);
+        return new Response("Error creating order items", { status: 500 });
+      }
+
+      console.log(
+        `✅ ${itemsToInsert.length} order_items insertados exitosamente:`,
+        insertedItems
+      );
+    } else {
+      console.error(
+        "❌ No se insertaron order_items porque no se encontraron productos válidos."
+      );
+      return new Response("No valid products found for order items", {
+        status: 400,
+      });
     }
   } else {
     console.log("ℹ️ Evento ignorado:", event.type);
