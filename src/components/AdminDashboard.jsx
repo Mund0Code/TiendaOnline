@@ -13,37 +13,37 @@ import AdminSupport from "./AdminSupport.jsx";
 
 const TABS = {
   home: {
-    label: "📋 Resumen",
+    label: "Resumen",
     component: <AdminHome client:load />,
     icon: "🏠",
   },
   orders: {
-    label: "📦 Pedidos",
+    label: "Pedidos",
     component: <AdminOrders client:load />,
     icon: "📦",
   },
   products: {
-    label: "🛒 Productos",
+    label: "Productos",
     component: <AdminProducts client:load />,
     icon: "🛒",
   },
   categories: {
-    label: "🗂️ Categorías",
+    label: "Categorías",
     component: <AdminCategories client:load />,
     icon: "🗂️",
   },
   users: {
-    label: "👥 Clientes",
+    label: "Clientes",
     component: <AdminUsers client:load />,
     icon: "👥",
   },
   analytics: {
-    label: "📊 Analíticas",
+    label: "Analíticas",
     component: <AdminAnalytics client:load />,
     icon: "📊",
   },
   support: {
-    label: "🎧 Soporte",
+    label: "Soporte",
     component: <AdminSupport client:load />,
     icon: "🎧",
   },
