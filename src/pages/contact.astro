@@ -445,11 +445,6 @@ import Layout from "../layouts/Layout.astro";
           return;
         }
 
-        if (message.length < 20) {
-          showError("El mensaje debe tener al menos 20 caracteres");
-          return;
-        }
-
         // Deshabilitar botón y mostrar loading
         submitButton.disabled = true;
         buttonText.classList.add("hidden");
