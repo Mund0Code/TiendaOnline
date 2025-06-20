@@ -170,7 +170,7 @@ function PaymentIcon({ type }) {
       </div>
     ),
     mastercard: (
-      <div className="w-8 h-5 bg-red-600 rounded flex items-center justify-center">
+      <div className="w-20 h-5 bg-red-600 rounded flex items-center justify-center">
         <span className="text-white text-xs font-bold">MasterCard</span>
       </div>
     ),
