@@ -72,7 +72,6 @@ export default function Footer() {
             </h3>
             <ul className="space-y-3">
               <FooterLink href="/privacy" text="Política de Privacidad" />
-              <FooterLink href="/terms" text="Términos de Servicio" />
               <FooterLink href="/licensing" text="Licencias" />
               <FooterLink href="/Contacto" text="Centro de Soporte" />
             </ul>
