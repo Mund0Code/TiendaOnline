@@ -300,9 +300,7 @@ export const server = {
       name: z.string().min(2, "El nombre debe tener al menos 2 caracteres"),
       email: z.string().email("Dirección de email inválida"),
       subject: z.string().optional(),
-      message: z
-        .string()
-        .min(20, "El mensaje debe tener al menos 20 caracteres"),
+      message: z.string(),
     }),
     handler: async (input) => {
       try {
