@@ -317,7 +317,7 @@ export default function Header() {
       {/* Overlay para cerrar menús */}
       {(isMenuOpen || isUserMenuOpen) && (
         <div
-          className="fixed inset-0 z-40 bg-black bg-opacity-25"
+          className="fixed inset-0 z-40 bg-opacity-25"
           onClick={() => {
             setIsMenuOpen(false);
             setIsUserMenuOpen(false);
