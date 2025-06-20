@@ -17,7 +17,7 @@ export const server = {
         from: "Acme <onboarding@resend.dev>",
         to: ["juanppdev@gmail.com"],
         headers: { replyTo: input.email },
-        subject: "Portfolio: Contact",
+        subject: "Mundonline Books: Contact",
         html: `<strong>Name:</strong> ${input.name}<br>
                 <strong>Email:</strong> ${input.email}<br><br>
                 <strong>Message:</strong><br> ${input.message.replace(/\n/g, "<br>")}`,
