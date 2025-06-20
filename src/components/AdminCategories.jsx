@@ -155,7 +155,7 @@ export default function AdminCategories() {
               <h2 className="text-xl font-bold text-white">
                 📋 Categorías Existentes
               </h2>
-              <span className="bg-white bg-opacity-20 px-3 py-1 rounded-full text-white text-sm font-medium">
+              <span className="bg-white bg-opacity-20 px-3 py-1 rounded-full text-black text-sm font-medium">
                 {categories.length} categorías
               </span>
             </div>
