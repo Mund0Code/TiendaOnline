@@ -1,0 +1,475 @@
+---
+// src/pages/contact.astro
+import Layout from "../layouts/Layout.astro";
+---
+
+<Layout>
+  <!-- Hero Section -->
+  <section
+    class="relative bg-gradient-to-br from-teal-600 via-blue-600 to-purple-600 text-white py-20"
+  >
+    <div class="absolute inset-0 bg-black opacity-10"></div>
+    <div class="relative max-w-4xl mx-auto text-center px-4">
+      <div class="text-6xl mb-6">💬</div>
+      <h1 class="text-5xl font-bold mb-6">Contáctanos</h1>
+      <p class="text-xl text-blue-100 max-w-3xl mx-auto leading-relaxed">
+        Estamos aquí para ayudarte. Ya sea que tengas una pregunta, necesites
+        soporte técnico o quieras compartir tu experiencia, nos encantaría
+        escucharte.
+      </p>
+    </div>
+  </section>
+
+  <!-- Main Content -->
+  <main class="max-w-6xl mx-auto px-4 py-16">
+    <!-- Métodos de contacto rápido -->
+    <section class="mb-16">
+      <div class="grid md:grid-cols-3 gap-8">
+        <!-- Email -->
+        <div
+          class="bg-white rounded-xl p-8 shadow-lg border border-gray-100 text-center hover:shadow-xl transition-shadow"
+        >
+          <div
+            class="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-6"
+          >
+            <span class="text-3xl">📧</span>
+          </div>
+          <h3 class="text-xl font-semibold text-gray-900 mb-3">Email</h3>
+          <p class="text-gray-600 mb-4">Respuesta en 24 horas</p>
+          <a
+            href="mailto:hola@mundonlinebooks.com"
+            class="text-blue-600 hover:text-blue-700 font-medium"
+          >
+            hola@mundonlinebooks.com
+          </a>
+        </div>
+
+        <!-- Chat en vivo -->
+        <div
+          class="bg-white rounded-xl p-8 shadow-lg border border-gray-100 text-center hover:shadow-xl transition-shadow"
+        >
+          <div
+            class="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6"
+          >
+            <span class="text-3xl">💬</span>
+          </div>
+          <h3 class="text-xl font-semibold text-gray-900 mb-3">Chat en Vivo</h3>
+          <p class="text-gray-600 mb-4">Lun-Vie 9:00-18:00 CET</p>
+          <button
+            class="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 transition-colors"
+          >
+            Iniciar Chat
+          </button>
+        </div>
+
+        <!-- Centro de ayuda -->
+        <div
+          class="bg-white rounded-xl p-8 shadow-lg border border-gray-100 text-center hover:shadow-xl transition-shadow"
+        >
+          <div
+            class="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-6"
+          >
+            <span class="text-3xl">📚</span>
+          </div>
+          <h3 class="text-xl font-semibold text-gray-900 mb-3">
+            Centro de Ayuda
+          </h3>
+          <p class="text-gray-600 mb-4">Respuestas inmediatas</p>
+          <a
+            href="/help"
+            class="text-purple-600 hover:text-purple-700 font-medium"
+          >
+            Ver FAQ
+          </a>
+        </div>
+      </div>
+    </section>
+
+    <!-- Formulario de contacto -->
+    <section class="mb-16">
+      <div class="grid lg:grid-cols-2 gap-12">
+        <!-- Formulario -->
+        <div class="bg-white rounded-xl p-8 shadow-lg border border-gray-100">
+          <h2 class="text-2xl font-bold text-gray-900 mb-6">
+            Envíanos un Mensaje
+          </h2>
+
+          <form id="contact-form" class="space-y-6">
+            <!-- Nombre -->
+            <div>
+              <label
+                for="name"
+                class="block text-sm font-medium text-gray-700 mb-2"
+              >
+                Nombre completo *
+              </label>
+              <input
+                type="text"
+                id="name"
+                name="name"
+                required
+                class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+                placeholder="Tu nombre completo"
+              />
+            </div>
+
+            <!-- Email -->
+            <div>
+              <label
+                for="email"
+                class="block text-sm font-medium text-gray-700 mb-2"
+              >
+                Correo electrónico *
+              </label>
+              <input
+                type="email"
+                id="email"
+                name="email"
+                required
+                class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+                placeholder="tu@email.com"
+              />
+            </div>
+
+            <!-- Mensaje -->
+            <div>
+              <label
+                for="message"
+                class="block text-sm font-medium text-gray-700 mb-2"
+              >
+                Mensaje *
+              </label>
+              <textarea
+                id="message"
+                name="message"
+                rows="6"
+                required
+                class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors resize-none"
+                placeholder="Describe tu consulta o problema con el mayor detalle posible..."
+              ></textarea>
+              <p class="text-xs text-gray-500 mt-1">Mínimo 20 caracteres</p>
+            </div>
+
+            <!-- Botón de envío -->
+            <button
+              type="submit"
+              id="submit-button"
+              class="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white py-3 px-6 rounded-lg font-semibold hover:from-blue-700 hover:to-purple-700 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
+            >
+              📤 Enviar Mensaje
+            </button>
+          </form>
+        </div>
+
+        <div
+          id="success-message"
+          class="hidden flex flex-col items-center justify-center py-8"
+        >
+          <div class="bg-green-600/10 p-4 rounded-full mb-4">
+            <span
+              class="iconify text-green-600 text-3xl"
+              data-icon="lucide:check"></span>
+          </div>
+          <h3 class="text-xl font-semibold mb-2 text-gray-900 dark:text-white">
+            ¡Mensaje enviado!
+          </h3>
+          <p class="text-gray-700 dark:text-gray-300 text-center max-w-md">
+            Gracias por contactarme. Te responderé lo antes posible.
+          </p>
+        </div>
+
+        <!-- Información adicional -->
+        <div class="space-y-8">
+          <!-- Horarios de atención -->
+          <div class="bg-white rounded-xl p-8 shadow-lg border border-gray-100">
+            <h3 class="text-xl font-semibold text-gray-900 mb-6">
+              ⏰ Horarios de Atención
+            </h3>
+            <div class="space-y-4">
+              <div class="flex justify-between items-center py-2">
+                <span class="text-gray-600">Lunes - Viernes</span>
+                <span class="font-medium text-gray-900">9:00 - 18:00 CET</span>
+              </div>
+              <div class="flex justify-between items-center py-2">
+                <span class="text-gray-600">Sábados</span>
+                <span class="font-medium text-gray-900">10:00 - 14:00 CET</span>
+              </div>
+              <div class="flex justify-between items-center py-2">
+                <span class="text-gray-600">Domingos</span>
+                <span class="font-medium text-gray-500">Cerrado</span>
+              </div>
+            </div>
+            <div class="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
+              <p class="text-blue-800 text-sm">
+                💡 <strong>Tip:</strong> Para soporte urgente fuera de horario, usa
+                el chat automático o envía un email marcando "URGENTE" en el asunto.
+              </p>
+            </div>
+          </div>
+
+          <!-- Tipos de soporte -->
+          <div class="bg-white rounded-xl p-8 shadow-lg border border-gray-100">
+            <h3 class="text-xl font-semibold text-gray-900 mb-6">
+              🛠️ Tipos de Soporte
+            </h3>
+            <div class="space-y-4">
+              <div class="flex items-start">
+                <div
+                  class="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center mr-3 mt-1"
+                >
+                  <span class="text-green-600">✓</span>
+                </div>
+                <div>
+                  <h4 class="font-medium text-gray-900">Soporte Técnico</h4>
+                  <p class="text-gray-600 text-sm">
+                    Problemas de descarga, instalación o acceso
+                  </p>
+                </div>
+              </div>
+              <div class="flex items-start">
+                <div
+                  class="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center mr-3 mt-1"
+                >
+                  <span class="text-blue-600">💳</span>
+                </div>
+                <div>
+                  <h4 class="font-medium text-gray-900">Facturación</h4>
+                  <p class="text-gray-600 text-sm">
+                    Pagos, reembolsos y facturas
+                  </p>
+                </div>
+              </div>
+              <div class="flex items-start">
+                <div
+                  class="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center mr-3 mt-1"
+                >
+                  <span class="text-purple-600">📚</span>
+                </div>
+                <div>
+                  <h4 class="font-medium text-gray-900">Contenido</h4>
+                  <p class="text-gray-600 text-sm">
+                    Sugerencias de libros y catálogo
+                  </p>
+                </div>
+              </div>
+              <div class="flex items-start">
+                <div
+                  class="w-8 h-8 bg-orange-100 rounded-lg flex items-center justify-center mr-3 mt-1"
+                >
+                  <span class="text-orange-600">🤝</span>
+                </div>
+                <div>
+                  <h4 class="font-medium text-gray-900">Colaboraciones</h4>
+                  <p class="text-gray-600 text-sm">
+                    Partnerships y oportunidades de negocio
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- FAQ Rápidas -->
+    <section class="mb-16">
+      <h2 class="text-3xl font-bold text-gray-900 mb-8 text-center">
+        ❓ Preguntas Frecuentes
+      </h2>
+      <div class="grid md:grid-cols-2 gap-6">
+        <!-- FAQ Items -->
+        <div class="bg-white rounded-xl p-6 shadow-lg border border-gray-100">
+          <h3 class="font-semibold text-gray-900 mb-3">
+            ¿Cómo puedo descargar mis libros?
+          </h3>
+          <p class="text-gray-600 text-sm">
+            Una vez realizada la compra, recibirás un email con los enlaces de
+            descarga. También puedes acceder desde tu cuenta en la sección "Mi
+            Biblioteca".
+          </p>
+        </div>
+
+        <div class="bg-white rounded-xl p-6 shadow-lg border border-gray-100">
+          <h3 class="font-semibold text-gray-900 mb-3">
+            ¿Puedo leer en múltiples dispositivos?
+          </h3>
+          <p class="text-gray-600 text-sm">
+            Sí, puedes descargar y leer tus libros en hasta 5 dispositivos
+            diferentes con la misma cuenta.
+          </p>
+        </div>
+
+        <div class="bg-white rounded-xl p-6 shadow-lg border border-gray-100">
+          <h3 class="font-semibold text-gray-900 mb-3">¿Ofrecen reembolsos?</h3>
+          <p class="text-gray-600 text-sm">
+            Ofrecemos reembolso completo dentro de los primeros 14 días si no
+            estás satisfecho con tu compra.
+          </p>
+        </div>
+
+        <div class="bg-white rounded-xl p-6 shadow-lg border border-gray-100">
+          <h3 class="font-semibold text-gray-900 mb-3">
+            ¿Qué formatos soportan?
+          </h3>
+          <p class="text-gray-600 text-sm">
+            Nuestros libros están disponibles en PDF y EPUB, compatibles con la
+            mayoría de dispositivos y aplicaciones de lectura.
+          </p>
+        </div>
+      </div>
+
+      <div class="text-center mt-8">
+        <a
+          href="/help"
+          class="bg-blue-600 text-white px-8 py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors inline-flex items-center"
+        >
+          📚 Ver todas las FAQ
+          <svg
+            class="w-4 h-4 ml-2"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M9 5l7 7-7 7"></path>
+          </svg>
+        </a>
+      </div>
+    </section>
+
+    <!-- Redes sociales -->
+    <section class="mb-16">
+      <div
+        class="bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl p-8 text-center"
+      >
+        <h2 class="text-2xl font-bold mb-4">🌐 Síguenos en Redes Sociales</h2>
+        <p class="text-blue-100 mb-8 max-w-2xl mx-auto">
+          Mantente al día con nuestras novedades, promociones especiales y
+          contenido exclusivo siguiéndonos en nuestras redes sociales.
+        </p>
+
+        <div class="flex justify-center space-x-6">
+          <a
+            href="#"
+            class="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center hover:bg-white/30 transition-colors"
+          >
+            <span class="text-xl">📘</span>
+          </a>
+          <a
+            href="#"
+            class="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center hover:bg-white/30 transition-colors"
+          >
+            <span class="text-xl">🐦</span>
+          </a>
+          <a
+            href="#"
+            class="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center hover:bg-white/30 transition-colors"
+          >
+            <span class="text-xl">📷</span>
+          </a>
+          <a
+            href="#"
+            class="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center hover:bg-white/30 transition-colors"
+          >
+            <span class="text-xl">💼</span>
+          </a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- JavaScript para el formulario -->
+  <script>
+    document.addEventListener("submit", function (e) {
+      const form = document.getElementById("contact-form");
+      const submitButton = document.getElementById("submit-button");
+      const buttonText = document.getElementById("button-text");
+      const loadingSpinner = document.getElementById("loading-spinner");
+      const successMessage = document.getElementById("success-message");
+
+      e.preventDefault();
+
+      // Desactivar inputs y mostrar loading
+      submitButton.disabled = true;
+      buttonText.textContent = "Enviando...";
+      loadingSpinner.classList.remove("hidden");
+
+      // Simular envío (1.5s)
+      setTimeout(() => {
+        // Ocultar loading y habilitar botón
+        loadingSpinner.classList.add("hidden");
+        submitButton.disabled = false;
+        buttonText.textContent = "Enviar mensaje";
+
+        // Limpiar campos del formulario
+        form.reset();
+
+        // Mostrar mensaje de éxito
+        form.classList.add("hidden");
+        successMessage.classList.remove("hidden");
+
+        // Después de 5 segundos, volver a mostrar el formulario
+        setTimeout(() => {
+          successMessage.classList.add("hidden");
+          form.classList.remove("hidden");
+        }, 5000);
+      }, 1500);
+
+      // Simulación de envío exitoso
+      setTimeout(() => {
+        alert("¡Mensaje enviado exitosamente! Te responderemos pronto.");
+        this.reset();
+      }, 1000);
+    });
+
+    // Manejo del archivo adjunto
+    document
+      .getElementById("attachment")
+      .addEventListener("change", function (e) {
+        const file = e.target.files[0];
+        if (file) {
+          const label = e.target.parentElement.querySelector("label");
+          label.innerHTML = `
+            <div class="text-green-500 mb-2">📎</div>
+            <p class="text-sm text-green-600">
+              Archivo seleccionado: ${file.name}
+            </p>
+            <p class="text-xs text-gray-500 mt-1">
+              Haz clic para cambiar
+            </p>
+          `;
+        }
+      });
+  </script>
+
+  <script>
+    import { actions } from "astro:actions";
+
+    const form = document.getElementById("contact-form") as HTMLFormElement;
+
+    form.addEventListener("submit", async function (event) {
+      event.preventDefault();
+
+      try {
+        const formData = new FormData(form);
+        const response = await actions.sendMailContact(formData);
+        const { error } = response || { error: null };
+
+        if (!error) {
+          // Success case
+          console.log("Email sent successfully");
+          form.reset();
+        } else {
+          // Error case
+          console.error("Error:", error);
+        }
+      } catch (err) {
+        // Exception case
+        console.error("Error in form submission:", err);
+      }
+    });
+  </script>
+</Layout>
