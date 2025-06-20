@@ -47,10 +47,10 @@ export default function AdminProducts() {
         description,
         image_url,
         file_path,
-        stripe_product_id,
         category:categories!products_category_id_fkey(
           name
         ),
+        stripe_product_id
       `
       )
       .order("created_at", { ascending: false });
