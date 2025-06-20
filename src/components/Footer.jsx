@@ -59,10 +59,8 @@ export default function Footer() {
             </h3>
             <ul className="space-y-3">
               <FooterLink href="/" text="Inicio" />
-              <FooterLink href="/catalog" text="Catálogo" />
+              <FooterLink href="/categorias" text="Catálogo" />
               <FooterLink href="/about" text="Acerca de" />
-              <FooterLink href="/help" text="Ayuda" />
-              <FooterLink href="/contact" text="Contacto" />
             </ul>
           </div>
 
@@ -76,32 +74,8 @@ export default function Footer() {
               <FooterLink href="/privacy" text="Política de Privacidad" />
               <FooterLink href="/terms" text="Términos de Servicio" />
               <FooterLink href="/licensing" text="Licencias" />
-              <FooterLink href="/support" text="Centro de Soporte" />
-              <FooterLink href="/faq" text="Preguntas Frecuentes" />
+              <FooterLink href="/Contacto" text="Centro de Soporte" />
             </ul>
-          </div>
-        </div>
-
-        {/* Newsletter (opcional) */}
-        <div className="mt-12 p-8 bg-white/5 backdrop-blur-sm rounded-2xl border border-white/10">
-          <div className="text-center max-w-2xl mx-auto">
-            <h3 className="text-xl font-semibold text-white mb-3">
-              📚 Mantente al día con nuestras novedades
-            </h3>
-            <p className="text-gray-300 mb-6">
-              Recibe notificaciones sobre nuevos libros, ofertas especiales y
-              actualizaciones.
-            </p>
-            <div className="flex flex-col sm:flex-row gap-3 max-w-md mx-auto">
-              <input
-                type="email"
-                placeholder="tu@email.com"
-                className="flex-1 px-4 py-3 bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl text-white placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent transition-all duration-200"
-              />
-              <button className="px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-500 text-white font-semibold rounded-xl hover:from-blue-600 hover:to-purple-600 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5">
-                Suscribirse
-              </button>
-            </div>
           </div>
         </div>
 
@@ -128,8 +102,6 @@ export default function Footer() {
               <div className="flex space-x-2">
                 <PaymentIcon type="visa" />
                 <PaymentIcon type="mastercard" />
-                <PaymentIcon type="paypal" />
-                <PaymentIcon type="stripe" />
               </div>
             </div>
           </div>
@@ -199,17 +171,7 @@ function PaymentIcon({ type }) {
     ),
     mastercard: (
       <div className="w-8 h-5 bg-red-600 rounded flex items-center justify-center">
-        <span className="text-white text-xs font-bold">MC</span>
-      </div>
-    ),
-    paypal: (
-      <div className="w-8 h-5 bg-blue-500 rounded flex items-center justify-center">
-        <span className="text-white text-xs font-bold">PP</span>
-      </div>
-    ),
-    stripe: (
-      <div className="w-8 h-5 bg-purple-600 rounded flex items-center justify-center">
-        <span className="text-white text-xs font-bold">$</span>
+        <span className="text-white text-xs font-bold">MasterCard</span>
       </div>
     ),
   };
