@@ -4,6 +4,21 @@ import { z } from "astro:schema";
 
 const resend = new Resend(import.meta.env.PUBLIC_RESEND_KEY);
 
+// Función para convertir el código del asunto en texto legible
+function getSubjectLabel(subject) {
+  const subjects = {
+    general: "Consulta general",
+    technical: "Soporte técnico",
+    billing: "Facturación y pagos",
+    account: "Problemas con la cuenta",
+    download: "Problemas de descarga",
+    suggestion: "Sugerencia o feedback",
+    partnership: "Colaboraciones",
+    other: "Otro tema",
+  };
+  return subjects[subject] || "Consulta general";
+}
+
 // Función para crear el template HTML profesional
 function createEmailTemplate(name, email, subject, message) {
   const currentDate = new Date().toLocaleDateString("es-ES", {
@@ -230,7 +245,7 @@ function createEmailTemplate(name, email, subject, message) {
                 ? `
               <div class="info-item">
                 <label>📋 Asunto</label>
-                <span>${getSubjectLabel()}</span>
+                <span>${getSubjectLabel(subject)}</span>
                 ${subject === "technical" ? '<span class="priority-badge">Prioridad</span>' : ""}
               </div>
             `
@@ -288,11 +303,6 @@ function createEmailTemplate(name, email, subject, message) {
   `;
 }
 
-// Función para convertir el código del asunto en texto legible
-function getSubjectLabel() {
-  return "Consulta general";
-}
-
 export const server = {
   sendMailContact: defineAction({
     accept: "form",
@@ -306,11 +316,17 @@ export const server = {
     }),
     handler: async (input) => {
       try {
+        console.log("📧 Iniciando envío de email:", {
+          name: input.name,
+          email: input.email,
+          subject: input.subject || "general",
+        });
+
         // Crear el template HTML profesional
         const htmlTemplate = createEmailTemplate(
           input.name,
           input.email,
-          input.subject,
+          input.subject || "general",
           input.message
         );
 
@@ -318,10 +334,10 @@ export const server = {
         const isPriority =
           input.subject === "technical" || input.subject === "billing";
         const subjectPrefix = isPriority ? "[PRIORITARIO] " : "";
-        const subjectLabel = "Consulta general";
+        const subjectLabel = getSubjectLabel(input.subject || "general");
 
-        const { data, error } = await resend.emails.send({
-          from: "MundonlineBooks <contacto@mundonlinebooks.com>",
+        const emailData = {
+          from: "MundonlineBooks <onboarding@resend.dev>", // Usar el dominio autorizado de Resend
           to: ["juanppdev@gmail.com"],
           replyTo: input.email,
           subject: `${subjectPrefix}${subjectLabel} - ${input.name}`,
@@ -341,18 +357,23 @@ ${input.message}
 Enviado desde el formulario de contacto de MundonlineBooks
 Fecha: ${new Date().toLocaleString("es-ES")}
           `.trim(),
-        });
+        };
+
+        console.log("📤 Enviando email con Resend...");
+
+        const { data, error } = await resend.emails.send(emailData);
 
         if (error) {
-          console.error("Error enviando email:", error);
+          console.error("❌ Error de Resend:", error);
           throw new ActionError({
             code: "INTERNAL_SERVER_ERROR",
-            message: "Error al enviar el mensaje. Por favor, intenta de nuevo.",
+            message: `Error al enviar el mensaje: ${error.message}`,
           });
         }
 
-        // Log exitoso (opcional)
-        console.log("Email enviado exitosamente:", {
+        // Log exitoso
+        console.log("✅ Email enviado exitosamente:", {
+          id: data?.id,
           to: input.email,
           subject: subjectLabel,
           timestamp: new Date().toISOString(),
@@ -364,7 +385,14 @@ Fecha: ${new Date().toLocaleString("es-ES")}
           data,
         };
       } catch (err) {
-        console.error("Error en sendMailContact:", err);
+        console.error("❌ Error en sendMailContact:", err);
+
+        // Si el error es de ActionError, re-lanzarlo
+        if (err instanceof ActionError) {
+          throw err;
+        }
+
+        // Para otros errores, crear un ActionError genérico
         throw new ActionError({
           code: "INTERNAL_SERVER_ERROR",
           message: "Error interno del servidor. Por favor, intenta más tarde.",
