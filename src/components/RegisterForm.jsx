@@ -49,7 +49,9 @@ export default function RegisterForm() {
     setLoading(true);
 
     try {
-      // 1) Registro en Auth
+      console.log("🚀 Iniciando registro para:", form.email);
+
+      // ✅ SOLO registro en Auth - el trigger se encarga del perfil
       const { data: signUpData, error: signUpError } =
         await supabase.auth.signUp({
           email: form.email.trim().toLowerCase(),
@@ -62,12 +64,18 @@ export default function RegisterForm() {
         });
 
       if (signUpError) {
+        console.error("❌ Error en signUp:", signUpError);
+
         if (signUpError.message.includes("already registered")) {
           setError("Este email ya está registrado. ¿Quieres iniciar sesión?");
         } else if (signUpError.message.includes("Password")) {
           setError("La contraseña no cumple con los requisitos de seguridad");
         } else if (signUpError.message.includes("email")) {
           setError("El formato del email no es válido");
+        } else if (signUpError.message.includes("Database error")) {
+          setError(
+            "Error en la base de datos. El perfil se creará automáticamente al confirmar tu email."
+          );
         } else {
           setError("Error en el registro: " + signUpError.message);
         }
@@ -82,46 +90,18 @@ export default function RegisterForm() {
         return;
       }
 
-      console.log("Usuario creado:", user.id);
+      console.log("✅ Usuario creado exitosamente:", user.id);
 
-      // 2) Crear perfil directamente
-      const { error: directProfileError } = await supabase
-        .from("profiles")
-        .upsert(
-          [
-            {
-              id: user.id,
-              full_name: form.name.trim(),
-              email: user.email,
-              created_at: new Date().toISOString(),
-            },
-          ],
-          {
-            onConflict: "id",
-          }
-        );
+      // ✅ ELIMINADO: Ya no intentamos crear el perfil manualmente
+      // El trigger handle_new_user() se encarga de esto automáticamente
 
-      if (directProfileError) {
-        console.error("Error creando perfil:", directProfileError);
-
-        if (directProfileError.message.includes("row-level security")) {
-          setError(
-            "Error de seguridad (RLS): el perfil se creará automáticamente al confirmar tu email."
-          );
-        } else {
-          setError("Error al crear perfil: " + directProfileError.message);
-        }
-      } else {
-        console.log("Perfil creado exitosamente");
-      }
-
-      // 3) Éxito (incluso si el perfil no se pudo crear por RLS)
-      console.log("Registro completado");
-
-      if (signUpData.user && !signUpData.user.email_confirmed_at) {
+      // ✅ Éxito inmediato
+      if (user && !user.email_confirmed_at) {
         setSuccess(
-          "¡Registro exitoso! Revisa tu email para confirmar tu cuenta. Tu perfil se completará automáticamente al confirmar."
+          "¡Registro exitoso! Revisa tu email para confirmar tu cuenta. Tu perfil se completará automáticamente."
         );
+
+        console.log("📧 Email de confirmación enviado");
 
         // Limpiar formulario
         setForm({ name: "", email: "", password: "" });
@@ -131,13 +111,14 @@ export default function RegisterForm() {
           window.location.href = "/login?message=confirm-email";
         }, 4000);
       } else {
+        // Usuario confirmado inmediatamente (unlikely but possible)
         setSuccess("¡Registro exitoso! Redirigiendo...");
         setTimeout(() => {
           window.location.href = "/login";
         }, 1500);
       }
     } catch (err) {
-      console.error("Error inesperado:", err);
+      console.error("❌ Error inesperado en registro:", err);
       setError("Error inesperado. Por favor intenta de nuevo.");
     } finally {
       setLoading(false);
