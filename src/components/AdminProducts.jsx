@@ -11,6 +11,7 @@ export default function AdminProducts() {
     image_url: "",
     file_path: "",
     category_id: "",
+    stripe_product_id: "",
   });
   const [editingId, setEditingId] = useState(null);
   const [error, setError] = useState(null);
@@ -48,7 +49,8 @@ export default function AdminProducts() {
         file_path,
         category:categories!products_category_id_fkey(
           name
-        )
+        ),
+        stripe_product_id
       `
       )
       .order("created_at", { ascending: false });
@@ -72,6 +74,7 @@ export default function AdminProducts() {
       image_url: "",
       file_path: "",
       category_id: "",
+      stripe_product_id: "",
     });
     setError(null);
     setShowModal(true);
@@ -86,6 +89,7 @@ export default function AdminProducts() {
       image_url: p.image_url || "",
       file_path: p.file_path || "",
       category_id: p.category_id || "",
+      stripe_product_id: p.stripe_product_id || "",
     });
     setError(null);
     setShowModal(true);
@@ -121,6 +125,14 @@ export default function AdminProducts() {
       return;
     }
 
+    if (form.stripe_product_id) {
+      setError(
+        "El ID de producto de Stripe no debe ser modificado manualmente."
+      );
+      setSubmitting(false);
+      return;
+    }
+
     try {
       const payload = {
         name: form.name.trim(),
@@ -129,6 +141,7 @@ export default function AdminProducts() {
         image_url: form.image_url.trim(),
         file_path: form.file_path,
         category_id: form.category_id,
+        stripe_product_id: form.stripe_product_id,
       };
 
       const action = editingId
@@ -150,6 +163,7 @@ export default function AdminProducts() {
           image_url: "",
           file_path: "",
           category_id: "",
+          stripe_product_id: "",
         });
       }
     } catch (err) {
@@ -469,21 +483,41 @@ export default function AdminProducts() {
                   </div>
                 </div>
 
-                {/* URL Imagen */}
-                <div className="space-y-2">
-                  <label className="text-sm font-semibold text-gray-700 flex items-center">
-                    <span className="mr-2">🖼️</span>
-                    URL de la imagen de portada
-                  </label>
-                  <input
-                    name="image_url"
-                    type="url"
-                    value={form.image_url}
-                    onChange={handleChange}
-                    disabled={submitting}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 disabled:bg-gray-100"
-                    placeholder="https://ejemplo.com/portada.jpg"
-                  />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Id de stripe */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-semibold text-gray-700 flex items-center">
+                      <span className="mr-2">💰</span>
+                      Id de Stripe *
+                    </label>
+                    <input
+                      name="stripe_product_id"
+                      type="text"
+                      value={form.stripe_product_id}
+                      onChange={handleChange}
+                      required
+                      disabled={submitting}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 disabled:bg-gray-100"
+                      placeholder="0.00"
+                    />
+                  </div>
+
+                  {/* URL Imagen */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-semibold text-gray-700 flex items-center">
+                      <span className="mr-2">🖼️</span>
+                      URL de la imagen de portada
+                    </label>
+                    <input
+                      name="image_url"
+                      type="url"
+                      value={form.image_url}
+                      onChange={handleChange}
+                      disabled={submitting}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 disabled:bg-gray-100"
+                      placeholder="https://ejemplo.com/portada.jpg"
+                    />
+                  </div>
                 </div>
 
                 {/* Subida de archivo */}
