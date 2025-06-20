@@ -5,18 +5,8 @@ import { z } from "astro:schema";
 const resend = new Resend(import.meta.env.PUBLIC_RESEND_KEY);
 
 // Función para convertir el código del asunto en texto legible
-function getSubjectLabel(subject) {
-  const subjects = {
-    general: "Consulta general",
-    technical: "Soporte técnico",
-    billing: "Facturación y pagos",
-    account: "Problemas con la cuenta",
-    download: "Problemas de descarga",
-    suggestion: "Sugerencia o feedback",
-    partnership: "Colaboraciones",
-    other: "Otro tema",
-  };
-  return subjects[subject] || "Consulta general";
+function getSubjectLabel() {
+  return "Consulta general";
 }
 
 // Función para crear el template HTML profesional
@@ -245,7 +235,7 @@ function createEmailTemplate(name, email, subject, message) {
                 ? `
               <div class="info-item">
                 <label>📋 Asunto</label>
-                <span>${getSubjectLabel(subject)}</span>
+                <span>${getSubjectLabel()}</span>
                 ${subject === "technical" ? '<span class="priority-badge">Prioridad</span>' : ""}
               </div>
             `
@@ -334,7 +324,7 @@ export const server = {
         const isPriority =
           input.subject === "technical" || input.subject === "billing";
         const subjectPrefix = isPriority ? "[PRIORITARIO] " : "";
-        const subjectLabel = getSubjectLabel(input.subject || "general");
+        const subjectLabel = getSubjectLabel();
 
         const emailData = {
           from: "MundonlineBooks <onboarding@resend.dev>", // Usar el dominio autorizado de Resend
