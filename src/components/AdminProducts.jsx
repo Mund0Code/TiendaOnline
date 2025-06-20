@@ -47,10 +47,10 @@ export default function AdminProducts() {
         description,
         image_url,
         file_path,
+        stripe_product_id,
         category:categories!products_category_id_fkey(
           name
         ),
-        stripe_product_id
       `
       )
       .order("created_at", { ascending: false });
@@ -125,7 +125,7 @@ export default function AdminProducts() {
       return;
     }
 
-    if (form.stripe_product_id) {
+    if (!form.stripe_product_id) {
       setError(
         "El ID de producto de Stripe no debe ser modificado manualmente."
       );
