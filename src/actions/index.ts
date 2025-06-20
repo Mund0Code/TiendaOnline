@@ -230,7 +230,7 @@ function createEmailTemplate(name, email, subject, message) {
                 ? `
               <div class="info-item">
                 <label>📋 Asunto</label>
-                <span>${getSubjectLabel(subject)}</span>
+                <span>${getSubjectLabel()}</span>
                 ${subject === "technical" ? '<span class="priority-badge">Prioridad</span>' : ""}
               </div>
             `
@@ -289,18 +289,8 @@ function createEmailTemplate(name, email, subject, message) {
 }
 
 // Función para convertir el código del asunto en texto legible
-function getSubjectLabel(subject) {
-  const subjects = {
-    general: "Consulta general",
-    technical: "Soporte técnico",
-    billing: "Facturación y pagos",
-    account: "Problemas con la cuenta",
-    download: "Problemas de descarga",
-    suggestion: "Sugerencia o feedback",
-    partnership: "Colaboraciones",
-    other: "Otro tema",
-  };
-  return subjects[subject] || "Consulta general";
+function getSubjectLabel() {
+  return "Consulta general";
 }
 
 export const server = {
@@ -328,9 +318,7 @@ export const server = {
         const isPriority =
           input.subject === "technical" || input.subject === "billing";
         const subjectPrefix = isPriority ? "[PRIORITARIO] " : "";
-        const subjectLabel = input.subject
-          ? getSubjectLabel(input.subject)
-          : "Consulta general";
+        const subjectLabel = "Consulta general";
 
         const { data, error } = await resend.emails.send({
           from: "MundonlineBooks <contacto@mundonlinebooks.com>",
