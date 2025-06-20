@@ -241,7 +241,8 @@ export default function ProfileDashboard() {
 
         {/* Sidebar */}
         <aside
-          className={`top-0 left-0 z-40 w-72 h-full bg-white/95 backdrop-blur-sm border-r border-gray-200 shadow-xl
+          className={`
+          fixed top-0 left-0 z-40 w-72 h-full bg-white/95 backdrop-blur-sm border-r border-gray-200 shadow-xl
           transition-transform transform duration-300 ease-in-out
           ${drawerOpen ? "translate-x-0" : "-translate-x-full"} sm:translate-x-0
         `}
