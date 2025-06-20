@@ -1,0 +1,261 @@
+---
+// src/pages/about.astro
+import Layout from "../layouts/Layout.astro";
+---
+
+<Layout title="Acerca de MundonlineBooks">
+  <!-- Hero Section -->
+  <section
+    class="relative bg-gradient-to-br from-blue-600 via-purple-600 to-indigo-600 text-white py-20"
+  >
+    <div class="absolute inset-0 bg-black opacity-10"></div>
+    <div class="relative max-w-4xl mx-auto text-center px-4">
+      <h1 class="text-5xl font-bold mb-6">Acerca de MundonlineBooks</h1>
+      <p class="text-xl text-blue-100 max-w-3xl mx-auto leading-relaxed">
+        Somos más que una librería digital. Somos tu puerta de entrada a un
+        mundo infinito de conocimiento, historias y experiencias que transforman
+        vidas.
+      </p>
+    </div>
+  </section>
+
+  <!-- Main Content -->
+  <main class="max-w-6xl mx-auto px-4 py-16">
+    <!-- Nuestra Historia -->
+    <section class="mb-16">
+      <div class="grid lg:grid-cols-2 gap-12 items-center">
+        <div>
+          <h2 class="text-3xl font-bold text-gray-900 mb-6">
+            📖 Nuestra Historia
+          </h2>
+          <div class="space-y-4 text-gray-600 leading-relaxed">
+            <p>
+              MundonlineBooks nació de una simple pero poderosa idea: hacer que
+              los libros sean accesibles para todos, en cualquier momento y
+              lugar. Fundada en 2024, nuestra plataforma comenzó como un
+              proyecto personal que rápidamente se convirtió en la visión de
+              democratizar el acceso a la lectura digital.
+            </p>
+            <p>
+              Creemos firmemente que el conocimiento no debe tener barreras. Por
+              eso hemos creado una plataforma que no solo vende libros, sino que
+              construye una comunidad de lectores apasionados que comparten la
+              misma sed de aprendizaje y aventura.
+            </p>
+            <p>
+              Desde nuestros humildes comienzos hasta convertirnos en una
+              referencia en el mundo de los libros digitales, cada paso ha
+              estado guiado por nuestro compromiso con la calidad, la
+              accesibilidad y la innovación.
+            </p>
+          </div>
+        </div>
+        <div class="relative">
+          <div
+            class="bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl p-8 text-white text-center"
+          >
+            <div class="text-6xl mb-4">📚</div>
+            <h3 class="text-2xl font-bold mb-2">+10,000</h3>
+            <p class="text-blue-100">Libros disponibles</p>
+            <div class="mt-6 grid grid-cols-2 gap-4 text-sm">
+              <div>
+                <div class="text-xl font-bold">5,000+</div>
+                <div class="text-blue-100">Usuarios activos</div>
+              </div>
+              <div>
+                <div class="text-xl font-bold">24/7</div>
+                <div class="text-blue-100">Disponibilidad</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Nuestra Misión -->
+    <section class="mb-16">
+      <div class="text-center mb-12">
+        <h2 class="text-3xl font-bold text-gray-900 mb-4">🎯 Nuestra Misión</h2>
+      </div>
+      <div class="grid md:grid-cols-3 gap-8">
+        <div
+          class="bg-white rounded-xl p-8 shadow-lg border border-gray-100 text-center hover:shadow-xl transition-shadow"
+        >
+          <div class="text-4xl mb-4">🌍</div>
+          <h3 class="text-xl font-semibold text-gray-900 mb-3">
+            Accesibilidad Universal
+          </h3>
+          <p class="text-gray-600">
+            Hacer que la lectura digital sea accesible para todos, eliminando
+            barreras geográficas y económicas que limitan el acceso al
+            conocimiento.
+          </p>
+        </div>
+        <div
+          class="bg-white rounded-xl p-8 shadow-lg border border-gray-100 text-center hover:shadow-xl transition-shadow"
+        >
+          <div class="text-4xl mb-4">⚡</div>
+          <h3 class="text-xl font-semibold text-gray-900 mb-3">
+            Innovación Continua
+          </h3>
+          <p class="text-gray-600">
+            Desarrollar constantemente nuevas tecnologías y características que
+            mejoren la experiencia de lectura y hagan que descubrir libros sea
+            más emocionante.
+          </p>
+        </div>
+        <div
+          class="bg-white rounded-xl p-8 shadow-lg border border-gray-100 text-center hover:shadow-xl transition-shadow"
+        >
+          <div class="text-4xl mb-4">🤝</div>
+          <h3 class="text-xl font-semibold text-gray-900 mb-3">
+            Comunidad Lectora
+          </h3>
+          <p class="text-gray-600">
+            Construir una comunidad vibrante donde los lectores puedan conectar,
+            compartir experiencias y descubrir nuevos mundos literarios juntos.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Nuestros Valores -->
+    <section class="mb-16">
+      <div
+        class="bg-gradient-to-r from-gray-50 to-blue-50 rounded-2xl p-8 lg:p-12"
+      >
+        <h2 class="text-3xl font-bold text-gray-900 mb-8 text-center">
+          💎 Nuestros Valores
+        </h2>
+        <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div class="text-center">
+            <div
+              class="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4"
+            >
+              <span class="text-2xl">🎯</span>
+            </div>
+            <h3 class="font-semibold text-gray-900 mb-2">Calidad</h3>
+            <p class="text-sm text-gray-600">
+              Seleccionamos cuidadosamente cada libro para garantizar contenido
+              de alta calidad
+            </p>
+          </div>
+          <div class="text-center">
+            <div
+              class="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4"
+            >
+              <span class="text-2xl">🔒</span>
+            </div>
+            <h3 class="font-semibold text-gray-900 mb-2">Seguridad</h3>
+            <p class="text-sm text-gray-600">
+              Protegemos tu información y garantizamos transacciones 100%
+              seguras
+            </p>
+          </div>
+          <div class="text-center">
+            <div
+              class="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-4"
+            >
+              <span class="text-2xl">⚡</span>
+            </div>
+            <h3 class="font-semibold text-gray-900 mb-2">Rapidez</h3>
+            <p class="text-sm text-gray-600">
+              Acceso instantáneo a tus libros, sin esperas ni complicaciones
+            </p>
+          </div>
+          <div class="text-center">
+            <div
+              class="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4"
+            >
+              <span class="text-2xl">💝</span>
+            </div>
+            <h3 class="font-semibold text-gray-900 mb-2">Pasión</h3>
+            <p class="text-sm text-gray-600">
+              Amamos los libros tanto como tú, y eso se refleja en todo lo que
+              hacemos
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Equipo -->
+    <section class="mb-16">
+      <div class="text-center mb-12">
+        <h2 class="text-3xl font-bold text-gray-900 mb-4">👥 Nuestro Equipo</h2>
+        <p class="text-gray-600 max-w-2xl mx-auto">
+          Conoce a las personas apasionadas que hacen posible MundonlineBooks
+          cada día.
+        </p>
+      </div>
+      <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+        <div class="bg-white rounded-xl p-6 shadow-lg text-center">
+          <div
+            class="w-24 h-24 bg-gradient-to-br from-blue-400 to-purple-500 rounded-full mx-auto mb-4 flex items-center justify-center text-white text-2xl font-bold"
+          >
+            CEO
+          </div>
+          <h3 class="text-xl font-semibold text-gray-900 mb-2">
+            Equipo Directivo
+          </h3>
+          <p class="text-gray-600 mb-4">
+            Visionarios que guían la estrategia y crecimiento de la plataforma
+          </p>
+          <div class="text-sm text-blue-600">📧 Contacto disponible</div>
+        </div>
+        <div class="bg-white rounded-xl p-6 shadow-lg text-center">
+          <div
+            class="w-24 h-24 bg-gradient-to-br from-green-400 to-blue-500 rounded-full mx-auto mb-4 flex items-center justify-center text-white text-2xl font-bold"
+          >
+            DEV
+          </div>
+          <h3 class="text-xl font-semibold text-gray-900 mb-2">Desarrollo</h3>
+          <p class="text-gray-600 mb-4">
+            Expertos en tecnología que construyen y mejoran continuamente la
+            plataforma
+          </p>
+          <div class="text-sm text-blue-600">🚀 Innovación constante</div>
+        </div>
+        <div class="bg-white rounded-xl p-6 shadow-lg text-center">
+          <div
+            class="w-24 h-24 bg-gradient-to-br from-purple-400 to-pink-500 rounded-full mx-auto mb-4 flex items-center justify-center text-white text-2xl font-bold"
+          >
+            SUP
+          </div>
+          <h3 class="text-xl font-semibold text-gray-900 mb-2">Soporte</h3>
+          <p class="text-gray-600 mb-4">
+            Equipo dedicado a ayudarte y resolver cualquier consulta que tengas
+          </p>
+          <div class="text-sm text-blue-600">🤝 Siempre disponibles</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Call to Action -->
+    <section
+      class="text-center bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-2xl p-12"
+    >
+      <h2 class="text-3xl font-bold mb-4">
+        ¿Listo para comenzar tu aventura literaria?
+      </h2>
+      <p class="text-xl text-blue-100 mb-8 max-w-2xl mx-auto">
+        Únete a miles de lectores que ya descubrieron su nueva biblioteca
+        digital favorita.
+      </p>
+      <div class="flex flex-col sm:flex-row gap-4 justify-center">
+        <a
+          href="/catalog"
+          class="bg-white text-blue-600 px-8 py-3 rounded-xl font-semibold hover:bg-gray-100 transition-colors inline-flex items-center justify-center"
+        >
+          📚 Explorar Catálogo
+        </a>
+        <a
+          href="/contact"
+          class="bg-blue-700 text-white px-8 py-3 rounded-xl font-semibold hover:bg-blue-800 transition-colors inline-flex items-center justify-center"
+        >
+          💬 Contáctanos
+        </a>
+      </div>
+    </section>
+  </main>
+</Layout>
