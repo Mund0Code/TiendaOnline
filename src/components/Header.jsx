@@ -38,7 +38,7 @@ export default function Header() {
 
   return (
     <nav
-      className={`w-full z-50 top-0 transition-all duration-300 ${
+      className={`w-full -z-40 top-0 transition-all duration-300 ${
         isScrolled
           ? "bg-white/95 backdrop-blur-md shadow-lg border-b border-gray-200/50"
           : "bg-white/90 backdrop-blur-sm border-b border-gray-200/30"
