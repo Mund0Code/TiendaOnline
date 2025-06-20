@@ -388,28 +388,24 @@ export default function AdminHome() {
           value={stats.totalOrders}
           icon="📦"
           color="blue"
-          trend="+12%"
         />
         <MetricCard
           label="Ingresos Totales"
           value={`€${stats.totalIncome}`}
           icon="💰"
           color="green"
-          trend="+8.2%"
         />
         <MetricCard
           label="Productos"
           value={stats.totalProducts}
           icon="🛒"
           color="purple"
-          trend="+3"
         />
         <MetricCard
           label="Clientes"
           value={stats.totalClients}
           icon="👥"
           color="orange"
-          trend="+15.7%"
         />
       </div>
 
@@ -580,16 +576,6 @@ function MetricCard({ label, value, icon, color, trend }) {
         <div className="flex-1">
           <p className="text-sm font-medium text-gray-600 mb-2">{label}</p>
           <p className="text-3xl font-bold text-gray-900 mb-2">{value}</p>
-          {trend && (
-            <div className="flex items-center">
-              <span className="text-green-500 text-sm font-medium">
-                ↗ {trend}
-              </span>
-              <span className="text-gray-500 text-xs ml-2">
-                vs mes anterior
-              </span>
-            </div>
-          )}
         </div>
         <div
           className={`w-12 h-12 bg-gradient-to-r ${colorClasses[color]} rounded-xl flex items-center justify-center text-white text-xl shadow-lg`}
