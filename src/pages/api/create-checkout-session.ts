@@ -171,7 +171,7 @@ export const POST: APIRoute = async ({ request }) => {
       );
     }
 
-    // 7. Crear line_items con metadata extendida para múltiples productos
+    // 7. Crear line_items básicos (sin verificar productos por ahora)
     console.log("🔄 Creando line_items...");
 
     const line_items = items.map((item) => ({
@@ -181,9 +181,6 @@ export const POST: APIRoute = async ({ request }) => {
           name: item.name,
           metadata: {
             database_id: item.id,
-            // Agregar información adicional para el webhook
-            product_id: item.id,
-            product_name: item.name,
           },
         },
         unit_amount: Math.round(item.price * 100),
@@ -193,25 +190,7 @@ export const POST: APIRoute = async ({ request }) => {
 
     console.log("📦 Line items creados:", line_items.length);
 
-    // 8. Crear metadata completo con TODOS los productos
-    const metadata = {
-      customer_id: customerId,
-      // Enviar información de todos los productos al webhook
-      product_ids: items.map((item) => item.id).join(","),
-      product_names: items.map((item) => item.name).join("|"), // Usar | como separador
-      product_quantities: items.map((item) => item.quantity).join(","),
-      product_prices: items
-        .map((item) => Math.round(item.price * 100))
-        .join(","),
-      // Mantener product_id por compatibilidad (primer producto)
-      product_id: items[0].id,
-      // Información adicional
-      total_items: items.length.toString(),
-    };
-
-    console.log("📋 Metadata para el webhook:", metadata);
-
-    // 9. Crear sesión de Stripe
+    // 8. Crear sesión de Stripe
     console.log("🔄 Creando sesión de Stripe...");
 
     try {
@@ -220,13 +199,12 @@ export const POST: APIRoute = async ({ request }) => {
         line_items,
         mode: "payment",
         client_reference_id: customerId,
-        metadata,
+        metadata: {
+          product_id: items[0].id,
+          customer_id: customerId,
+        },
         success_url: `${import.meta.env.PUBLIC_SITE_URL || "http://localhost:4321"}/success?session_id={CHECKOUT_SESSION_ID}`,
         cancel_url: `${import.meta.env.PUBLIC_SITE_URL || "http://localhost:4321"}/cart`,
-        // Agregar información adicional para facturas
-        invoice_creation: {
-          enabled: true,
-        },
       });
 
       console.log("✅ Sesión de Stripe creada:", session.id);
