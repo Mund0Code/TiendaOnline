@@ -123,13 +123,13 @@ export default function AdminDashboard() {
       {/* Sidebar mejorado */}
       <aside
         className={`
-        top-0 left-0 bottom-0 z-40 w-72 h-screen transition-transform duration-300 ease-in-out
+        fixed top-0 left-0 z-40 w-72 h-screen transition-transform duration-300 ease-in-out
         ${sidebarOpen ? "translate-x-0" : "-translate-x-full"} lg:translate-x-0
       `}
       >
         <div className="h-full bg-white/80 backdrop-blur-xl border-r border-gray-200/50 shadow-2xl">
           {/* Header del sidebar */}
-          <div className="p-6 border-b border-gray-200/50">
+          <div className="h-full p-6 border-b border-gray-200/50">
             <div className="flex items-center space-x-3">
               <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-600 rounded-xl flex items-center justify-center">
                 <span className="text-white font-bold text-lg">A</span>
