@@ -1,4 +1,4 @@
-// src/lib/cartStore.ts - Versión simplificada sin hooks problemáticos
+// src/lib/cartStore.ts - Versión segura basada en tu código original
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
@@ -13,153 +13,79 @@ export interface CartItem {
 
 interface CartState {
   items: CartItem[];
-  isAddingToCart: boolean;
-  isUpdatingCart: boolean;
+  isAddingToCart: boolean; // Solo agregamos este estado
 
-  // Acciones principales
-  addItem: (item: CartItem) => Promise<void>;
+  addItem: (item: CartItem) => Promise<void>; // Hacemos async solo este método
   removeItem: (id: string) => void;
-  updateQuantity: (id: string, qty: number) => Promise<void>;
+  updateQuantity: (id: string, qty: number) => void;
   clearCart: () => void;
-
-  // Getters útiles
   total: () => number;
-  totalItems: () => number;
-  isItemInCart: (id: string) => boolean;
-  getItemQuantity: (id: string) => number;
-  getItem: (id: string) => CartItem | undefined;
 }
 
 export const useCartStore = create<CartState>()(
   persist(
     (set, get) => ({
       items: [],
-      isAddingToCart: false,
-      isUpdatingCart: false,
+      isAddingToCart: false, // Estado inicial
 
-      // Agregar item con loading state
-      addItem: async (item: CartItem) => {
-        // Prevenir múltiples operaciones simultáneas
+      // Solo modificamos addItem para que sea async
+      addItem: async (item) => {
+        // Prevenir múltiples adiciones
         if (get().isAddingToCart) {
-          console.log("⚠️ Ya se está agregando un producto al carrito");
+          console.log("⚠️ Ya se está agregando un producto");
           return;
         }
 
         set({ isAddingToCart: true });
 
         try {
-          // Simular pequeña demora para mejor UX
+          // Pequeña demora para UX
           await new Promise((resolve) => setTimeout(resolve, 300));
 
+          // Tu lógica original
           const items = get().items;
-          const existingItem = items.find((i) => i.id === item.id);
-
-          if (existingItem) {
-            // Si ya existe, incrementar cantidad
+          const exists = items.find((i) => i.id === item.id);
+          if (exists) {
             set({
               items: items.map((i) =>
                 i.id === item.id
-                  ? { ...i, quantity: i.quantity + (item.quantity || 1) }
+                  ? { ...i, quantity: i.quantity + item.quantity }
                   : i
               ),
             });
-            console.log(`✅ Cantidad actualizada para: ${item.name}`);
           } else {
-            // Si no existe, agregar nuevo
-            set({
-              items: [...items, { ...item, quantity: item.quantity || 1 }],
-            });
-            console.log(`✅ Producto agregado al carrito: ${item.name}`);
+            set({ items: [...items, item] });
           }
+
+          console.log(`✅ Producto agregado: ${item.name}`);
         } catch (error) {
           console.error("❌ Error agregando al carrito:", error);
-          throw error;
         } finally {
           set({ isAddingToCart: false });
         }
       },
 
-      // Remover item
-      removeItem: (id: string) => {
-        const item = get().getItem(id);
+      // Mantener tus métodos originales sin cambios
+      removeItem: (id) =>
+        set({ items: get().items.filter((i) => i.id !== id) }),
+
+      updateQuantity: (id, qty) =>
         set({
-          items: get().items.filter((i) => i.id !== id),
-        });
-        console.log(`🗑️ Producto eliminado del carrito: ${item?.name || id}`);
-      },
+          items: get().items.map((i) =>
+            i.id === id ? { ...i, quantity: qty } : i
+          ),
+        }),
 
-      // Actualizar cantidad con loading state
-      updateQuantity: async (id: string, qty: number) => {
-        if (qty < 0) {
-          console.warn("⚠️ Cantidad no puede ser negativa");
-          return;
-        }
+      clearCart: () => set({ items: [] }),
 
-        if (qty === 0) {
-          get().removeItem(id);
-          return;
-        }
-
-        set({ isUpdatingCart: true });
-
-        try {
-          // Pequeña demora para feedback visual
-          await new Promise((resolve) => setTimeout(resolve, 200));
-
-          set({
-            items: get().items.map((i) =>
-              i.id === id ? { ...i, quantity: qty } : i
-            ),
-          });
-
-          const item = get().getItem(id);
-          console.log(`🔄 Cantidad actualizada: ${item?.name} -> ${qty}`);
-        } catch (error) {
-          console.error("❌ Error actualizando cantidad:", error);
-          throw error;
-        } finally {
-          set({ isUpdatingCart: false });
-        }
-      },
-
-      // Limpiar carrito
-      clearCart: () => {
-        const itemCount = get().totalItems();
-        set({ items: [] });
-        console.log(`🧹 Carrito vaciado (${itemCount} productos eliminados)`);
-      },
-
-      // Getters útiles
-      total: () => {
-        return get().items.reduce((sum, i) => sum + i.price * i.quantity, 0);
-      },
-
-      totalItems: () => {
-        return get().items.reduce((sum, i) => sum + i.quantity, 0);
-      },
-
-      isItemInCart: (id: string) => {
-        return get().items.some((item) => item.id === id);
-      },
-
-      getItemQuantity: (id: string) => {
-        const item = get().items.find((i) => i.id === id);
-        return item?.quantity || 0;
-      },
-
-      getItem: (id: string) => {
-        return get().items.find((i) => i.id === id);
-      },
+      total: () =>
+        get().items.reduce((sum, i) => sum + i.price * i.quantity, 0),
     }),
     {
       name: "myshop-cart",
       getStorage: () => localStorage,
-      // Solo persistir items, no los estados de loading
-      partialize: (state) => ({
-        items: state.items,
-      }),
-      // Versión para manejar migraciones futuras
-      version: 1,
+      // Solo persistir items, no el estado de loading
+      partialize: (state) => ({ items: state.items }),
     }
   )
 );
