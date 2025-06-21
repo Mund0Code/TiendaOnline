@@ -1,4 +1,4 @@
-// ✅ webhook.ts - versión completa
+// ✅ webhook.ts - versión corregida con mejor manejo de productos
 import type { APIRoute } from "astro";
 import { Stripe } from "stripe";
 import { supabaseAdmin } from "../../lib/supabaseAdminClient";
@@ -42,73 +42,129 @@ export const POST: APIRoute = async ({ request }) => {
       customer_email: session.customer_details?.email,
       client_reference_id: session.client_reference_id,
       amount_total: session.amount_total,
+      metadata: session.metadata,
     });
 
-    // 1. Obtener line items
+    // 1. Obtener line items con productos expandidos
     const { data: lineItems = [] } =
       await stripe.checkout.sessions.listLineItems(session.id, {
         limit: 100,
-        expand: ["data", "data.price.product"],
+        expand: ["data.price.product"],
       });
 
     console.log("🧾 Line items obtenidos:", lineItems.length);
+    console.log("🧾 Detalle line items:", JSON.stringify(lineItems, null, 2));
 
     if (lineItems.length === 0) {
       console.error("❌ No se encontraron line items");
       return new Response("No line items found", { status: 400 });
     }
 
-    // 2. Procesar nombres y encontrar primer producto
-    const itemNames = lineItems.map((li) => {
-      const prod = (li.price as any).product as Stripe.Product;
-      return prod?.name ?? li.description ?? "Producto";
-    });
-    const name = itemNames.join(", ");
+    // 2. Obtener todos los productos de la base de datos para debugging
+    const { data: allProducts } = await supabaseAdmin
+      .from("products")
+      .select("id, name, stripe_product_id");
 
+    console.log("📋 Productos disponibles en DB:", allProducts);
+
+    // 3. Procesar nombres de productos y encontrar matches
+    const itemNames = [];
     let firstProductId = null;
-    const firstLineItem = lineItems[0];
-    const stripeProduct = (firstLineItem.price as any).product;
-    const stripeProdId =
-      typeof stripeProduct === "string" ? stripeProduct : stripeProduct?.id;
+    const itemsToInsert = [];
 
-    console.log("🔍 Buscando producto para Stripe ID:", stripeProdId);
+    for (let i = 0; i < lineItems.length; i++) {
+      const li = lineItems[i];
+      const stripePrice = li.price as Stripe.Price;
+      const stripeProduct = stripePrice?.product as Stripe.Product;
 
-    if (stripeProdId) {
-      const { data: productData, error: prodSearchError } = await supabaseAdmin
-        .from("products")
-        .select("id, name, stripe_product_id")
-        .eq("stripe_product_id", stripeProdId)
-        .single();
-
-      console.log("🔍 Resultado búsqueda producto:", {
-        productData,
-        prodSearchError,
+      console.log(`📦 Procesando item ${i + 1}:`, {
+        line_item_id: li.id,
+        price_id: stripePrice?.id,
+        product_id: stripeProduct?.id,
+        product_name: stripeProduct?.name,
+        unit_amount: stripePrice?.unit_amount,
+        quantity: li.quantity,
       });
 
-      if (productData) {
-        firstProductId = productData.id;
-        console.log(
-          "✅ Producto encontrado:",
-          productData.name,
-          "ID:",
-          firstProductId
-        );
-      } else {
-        console.warn(
-          "⚠️ Producto no encontrado en DB para Stripe ID:",
-          stripeProdId
-        );
+      // Agregar nombre al array
+      const productName = stripeProduct?.name || li.description || "Producto";
+      itemNames.push(productName);
 
-        // Verificar qué productos tienes en tu DB
-        const { data: allProducts } = await supabaseAdmin
+      // Buscar en la base de datos
+      let dbProduct = null;
+
+      if (stripeProduct?.id) {
+        // Buscar por stripe_product_id
+        const { data: productByStripeId } = await supabaseAdmin
           .from("products")
-          .select("id, name, stripe_product_id");
+          .select("id, name, stripe_product_id")
+          .eq("stripe_product_id", stripeProduct.id)
+          .single();
 
-        console.log("📋 Productos disponibles en DB:", allProducts);
+        if (productByStripeId) {
+          dbProduct = productByStripeId;
+          console.log(
+            `✅ Producto encontrado por stripe_product_id:`,
+            dbProduct
+          );
+        } else {
+          // Si no se encuentra por stripe_product_id, buscar por nombre
+          console.log(
+            `⚠️ No encontrado por stripe_product_id, buscando por nombre: "${productName}"`
+          );
+
+          const { data: productByName } = await supabaseAdmin
+            .from("products")
+            .select("id, name, stripe_product_id")
+            .ilike("name", `%${productName}%`)
+            .single();
+
+          if (productByName) {
+            dbProduct = productByName;
+            console.log(`✅ Producto encontrado por nombre:`, dbProduct);
+
+            // Actualizar el stripe_product_id en la base de datos
+            await supabaseAdmin
+              .from("products")
+              .update({ stripe_product_id: stripeProduct.id })
+              .eq("id", productByName.id);
+
+            console.log(
+              `🔄 Actualizado stripe_product_id para producto ${productByName.id}`
+            );
+          }
+        }
+      }
+
+      // Si encontramos el producto, preparar para order_items
+      if (dbProduct) {
+        if (!firstProductId) {
+          firstProductId = dbProduct.id;
+        }
+
+        itemsToInsert.push({
+          product_id: dbProduct.id,
+          unit_price: stripePrice?.unit_amount || 0,
+          quantity: li.quantity || 1,
+        });
+      } else {
+        console.error(`❌ No se pudo encontrar producto para:`, {
+          stripe_product_id: stripeProduct?.id,
+          product_name: productName,
+        });
       }
     }
 
-    // 3. Crear orden
+    // 4. Usar metadata si no encontramos productos
+    if (!firstProductId && session.metadata?.product_id) {
+      console.log(
+        "🔍 Usando product_id de metadata:",
+        session.metadata.product_id
+      );
+      firstProductId = session.metadata.product_id;
+    }
+
+    // 5. Crear orden
     const amount = (session.amount_total ?? 0) / 100;
     const orderData = {
       checkout_session_id: session.id,
@@ -116,8 +172,8 @@ export const POST: APIRoute = async ({ request }) => {
       customer_email: session.customer_details?.email || "unknown",
       amount_total: amount,
       status: "paid",
-      name,
-      product_id: firstProductId, // Agregar el product_id del primer producto
+      name: itemNames.join(", "),
+      product_id: firstProductId,
       created_at: new Date().toISOString(),
     };
 
@@ -136,85 +192,32 @@ export const POST: APIRoute = async ({ request }) => {
 
     console.log("✅ Orden creada exitosamente:", insertedOrder);
 
-    // 4. Procesar TODOS los line items para order_items
-    const itemsToInsert = [];
-
-    for (let i = 0; i < lineItems.length; i++) {
-      const li = lineItems[i];
-      const stripeProduct = (li.price as any).product;
-      const stripeProdId =
-        typeof stripeProduct === "string" ? stripeProduct : stripeProduct?.id;
-
-      const unitAmount = (li.price as any).unit_amount ?? 0;
-      const quantity = li.quantity ?? 1;
-
-      console.log(`📦 Procesando item ${i + 1}/${lineItems.length}:`, {
-        stripeProdId,
-        unitAmount,
-        quantity,
-        description: li.description,
-      });
-
-      if (!stripeProdId) {
-        console.warn(`⚠️ Item ${i + 1} no tiene stripe_product_id`);
-        continue;
-      }
-
-      const { data: productData, error: prodErr } = await supabaseAdmin
-        .from("products")
-        .select("id, name, stripe_product_id")
-        .eq("stripe_product_id", stripeProdId)
-        .single();
-
-      console.log(`🔍 Búsqueda producto item ${i + 1}:`, {
-        productData,
-        prodErr,
-      });
-
-      if (prodErr || !productData) {
-        console.warn(
-          `⚠️ Producto no encontrado en DB para Stripe ID: ${stripeProdId}`,
-          prodErr
-        );
-        continue;
-      }
-
-      const itemToInsert = {
-        order_id: insertedOrder.id,
-        product_id: productData.id,
-        unit_price: unitAmount,
-        quantity,
-      };
-
-      console.log(`✅ Item ${i + 1} preparado para insertar:`, itemToInsert);
-      itemsToInsert.push(itemToInsert);
-    }
-
-    console.log("📦 Items finales para insertar:", itemsToInsert);
-
-    // 5. Insertar order_items
+    // 6. Insertar order_items si tenemos productos válidos
     if (itemsToInsert.length > 0) {
+      const finalItemsToInsert = itemsToInsert.map((item) => ({
+        ...item,
+        order_id: insertedOrder.id,
+      }));
+
+      console.log("📦 Insertando order_items:", finalItemsToInsert);
+
       const { data: insertedItems, error: itemsErr } = await supabaseAdmin
         .from("order_items")
-        .insert(itemsToInsert)
+        .insert(finalItemsToInsert)
         .select();
 
       if (itemsErr) {
         console.error("❌ Error al insertar order_items:", itemsErr);
-        return new Response("Error creating order items", { status: 500 });
+      } else {
+        console.log(
+          `✅ ${finalItemsToInsert.length} order_items insertados:`,
+          insertedItems
+        );
       }
-
-      console.log(
-        `✅ ${itemsToInsert.length} order_items insertados exitosamente:`,
-        insertedItems
-      );
     } else {
-      console.error(
-        "❌ No se insertaron order_items porque no se encontraron productos válidos."
+      console.warn(
+        "⚠️ No se insertaron order_items - no se encontraron productos válidos"
       );
-      return new Response("No valid products found for order items", {
-        status: 400,
-      });
     }
   } else {
     console.log("ℹ️ Evento ignorado:", event.type);
