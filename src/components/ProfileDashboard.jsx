@@ -206,7 +206,7 @@ export default function ProfileDashboard() {
   const userInitials = displayName.charAt(0).toUpperCase();
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50">
+    <div className="min-h-screen bg-gradient-to-br mt-24 from-gray-50 to-blue-50">
       <div className="flex h-screen overflow-hidden">
         {/* Toggle botón para móvil */}
         <button
