@@ -169,7 +169,7 @@ export default function AdminDashboard() {
           </nav>
 
           {/* Footer del sidebar */}
-          <div className="bottom-4 left-4 right-4">
+          <div className="absolute bottom-4 left-4 right-4">
             <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl p-4 border border-blue-200/50">
               <p className="text-sm text-gray-600 font-medium">
                 Panel Administrativo
