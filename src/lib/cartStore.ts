@@ -1,4 +1,4 @@
-// src/lib/cartStore.ts - Limitado a 1 artículo por producto
+// src/lib/cartStore.ts - Solo 1 producto total en el carrito
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
@@ -36,11 +36,10 @@ export const useCartStore = create<CartState>()(
         }
 
         const items = get().items;
-        const exists = items.find((i) => i.id === item.id);
 
-        // Si ya existe, no hacer nada (limitar a 1 por producto)
-        if (exists) {
-          console.log("⚠️ Este producto ya está en el carrito");
+        // Si ya hay un producto en el carrito, no agregar más
+        if (items.length >= 1) {
+          console.log("⚠️ Solo se permite 1 producto en el carrito");
           return;
         }
 
@@ -50,9 +49,9 @@ export const useCartStore = create<CartState>()(
           // Pequeña demora para UX
           await new Promise((resolve) => setTimeout(resolve, 300));
 
-          // Solo agregar si no existe (cantidad siempre 1)
+          // Agregar el producto (siempre será el único)
           set({
-            items: [...items, { ...item, quantity: 1 }],
+            items: [{ ...item, quantity: 1 }],
           });
 
           console.log(`✅ Producto agregado: ${item.name}`);
@@ -66,18 +65,13 @@ export const useCartStore = create<CartState>()(
       removeItem: (id) =>
         set({ items: get().items.filter((i) => i.id !== id) }),
 
-      // Limitar updateQuantity para que no supere 1
       updateQuantity: (id, qty) => {
-        if (qty > 1) {
-          console.log("⚠️ Máximo 1 artículo por producto");
-          qty = 1;
-        }
-
         if (qty <= 0) {
           get().removeItem(id);
           return;
         }
 
+        // Permitir cambiar cantidad del único producto
         set({
           items: get().items.map((i) =>
             i.id === id ? { ...i, quantity: qty } : i
