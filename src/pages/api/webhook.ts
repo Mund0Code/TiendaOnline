@@ -1,4 +1,4 @@
-// ✅ webhook.ts - versión corregida con mejor manejo de productos
+// ✅ webhook.ts - versión corregida para múltiples productos
 import type { APIRoute } from "astro";
 import { Stripe } from "stripe";
 import { supabaseAdmin } from "../../lib/supabaseAdminClient";
@@ -60,111 +60,176 @@ export const POST: APIRoute = async ({ request }) => {
       return new Response("No line items found", { status: 400 });
     }
 
-    // 2. Obtener todos los productos de la base de datos para debugging
+    // 2. Obtener todos los productos de la base de datos
     const { data: allProducts } = await supabaseAdmin
       .from("products")
       .select("id, name, stripe_product_id");
 
     console.log("📋 Productos disponibles en DB:", allProducts);
 
-    // 3. Procesar nombres de productos y encontrar matches
-    const itemNames = [];
-    let firstProductId = null;
-    const itemsToInsert = [];
+    // 3. Procesar productos desde metadata y line items
+    let productsFromMetadata = [];
 
+    // Intentar obtener productos del metadata primero
+    if (session.metadata?.product_ids) {
+      const productIds = session.metadata.product_ids.split(",");
+      const productNames = session.metadata.product_names?.split("|") || [];
+      const productQuantities =
+        session.metadata.product_quantities?.split(",").map(Number) || [];
+      const productPrices =
+        session.metadata.product_prices?.split(",").map(Number) || [];
+
+      console.log("📋 Productos desde metadata:", {
+        productIds,
+        productNames,
+        productQuantities,
+        productPrices,
+      });
+
+      productsFromMetadata = productIds.map((id, index) => ({
+        database_id: id,
+        name: productNames[index] || `Producto ${index + 1}`,
+        quantity: productQuantities[index] || 1,
+        unit_amount: productPrices[index] || 0,
+        source: "metadata",
+      }));
+    }
+
+    // 4. Procesar line items para obtener productos de Stripe
+    const productsFromLineItems = [];
     for (let i = 0; i < lineItems.length; i++) {
       const li = lineItems[i];
       const stripePrice = li.price as Stripe.Price;
       const stripeProduct = stripePrice?.product as Stripe.Product;
 
-      console.log(`📦 Procesando item ${i + 1}:`, {
+      console.log(`📦 Procesando line item ${i + 1}:`, {
         line_item_id: li.id,
         price_id: stripePrice?.id,
         product_id: stripeProduct?.id,
         product_name: stripeProduct?.name,
         unit_amount: stripePrice?.unit_amount,
         quantity: li.quantity,
+        product_metadata: stripeProduct?.metadata,
       });
 
-      // Agregar nombre al array
-      const productName = stripeProduct?.name || li.description || "Producto";
-      itemNames.push(productName);
+      const productInfo = {
+        stripe_product_id: stripeProduct?.id,
+        name: stripeProduct?.name || li.description || "Producto",
+        quantity: li.quantity || 1,
+        unit_amount: stripePrice?.unit_amount || 0,
+        database_id:
+          stripeProduct?.metadata?.database_id ||
+          stripeProduct?.metadata?.product_id,
+        source: "line_items",
+      };
 
-      // Buscar en la base de datos
-      let dbProduct = null;
+      productsFromLineItems.push(productInfo);
+    }
 
-      if (stripeProduct?.id) {
-        // Buscar por stripe_product_id
-        const { data: productByStripeId } = await supabaseAdmin
-          .from("products")
-          .select("id, name, stripe_product_id")
-          .eq("stripe_product_id", stripeProduct.id)
-          .single();
+    console.log("📦 Productos desde line items:", productsFromLineItems);
 
-        if (productByStripeId) {
-          dbProduct = productByStripeId;
+    // 5. Combinar y procesar todos los productos
+    const allProductsInfo = [];
+
+    // Priorizar metadata si está disponible y es completo
+    if (productsFromMetadata.length > 0) {
+      for (const metaProduct of productsFromMetadata) {
+        const dbProduct = allProducts?.find(
+          (p) => p.id === metaProduct.database_id
+        );
+
+        if (dbProduct) {
+          allProductsInfo.push({
+            database_id: dbProduct.id,
+            database_name: dbProduct.name,
+            quantity: metaProduct.quantity,
+            unit_amount: metaProduct.unit_amount,
+            source: "metadata_matched",
+          });
           console.log(
-            `✅ Producto encontrado por stripe_product_id:`,
-            dbProduct
+            `✅ Producto desde metadata encontrado en DB:`,
+            dbProduct.name
           );
         } else {
-          // Si no se encuentra por stripe_product_id, buscar por nombre
+          console.warn(
+            `⚠️ Producto desde metadata no encontrado en DB:`,
+            metaProduct.database_id
+          );
+        }
+      }
+    }
+
+    // Si no tenemos productos del metadata, usar line items
+    if (allProductsInfo.length === 0) {
+      for (const lineProduct of productsFromLineItems) {
+        let dbProduct = null;
+
+        // Buscar por database_id del metadata del producto
+        if (lineProduct.database_id) {
+          dbProduct = allProducts?.find(
+            (p) => p.id === lineProduct.database_id
+          );
+        }
+
+        // Si no se encuentra, buscar por stripe_product_id
+        if (!dbProduct && lineProduct.stripe_product_id) {
+          dbProduct = allProducts?.find(
+            (p) => p.stripe_product_id === lineProduct.stripe_product_id
+          );
+        }
+
+        // Si no se encuentra, buscar por nombre
+        if (!dbProduct) {
+          dbProduct = allProducts?.find(
+            (p) =>
+              p.name.toLowerCase().includes(lineProduct.name.toLowerCase()) ||
+              lineProduct.name.toLowerCase().includes(p.name.toLowerCase())
+          );
+        }
+
+        if (dbProduct) {
+          allProductsInfo.push({
+            database_id: dbProduct.id,
+            database_name: dbProduct.name,
+            quantity: lineProduct.quantity,
+            unit_amount: lineProduct.unit_amount,
+            source: "line_items_matched",
+          });
           console.log(
-            `⚠️ No encontrado por stripe_product_id, buscando por nombre: "${productName}"`
+            `✅ Producto desde line items encontrado:`,
+            dbProduct.name
           );
 
-          const { data: productByName } = await supabaseAdmin
-            .from("products")
-            .select("id, name, stripe_product_id")
-            .ilike("name", `%${productName}%`)
-            .single();
-
-          if (productByName) {
-            dbProduct = productByName;
-            console.log(`✅ Producto encontrado por nombre:`, dbProduct);
-
-            // Actualizar el stripe_product_id en la base de datos
+          // Actualizar stripe_product_id si no está set
+          if (!dbProduct.stripe_product_id && lineProduct.stripe_product_id) {
             await supabaseAdmin
               .from("products")
-              .update({ stripe_product_id: stripeProduct.id })
-              .eq("id", productByName.id);
-
+              .update({ stripe_product_id: lineProduct.stripe_product_id })
+              .eq("id", dbProduct.id);
             console.log(
-              `🔄 Actualizado stripe_product_id para producto ${productByName.id}`
+              `🔄 Actualizado stripe_product_id para ${dbProduct.name}`
             );
           }
+        } else {
+          console.error(`❌ No se pudo encontrar producto para:`, {
+            database_id: lineProduct.database_id,
+            stripe_product_id: lineProduct.stripe_product_id,
+            name: lineProduct.name,
+          });
         }
-      }
-
-      // Si encontramos el producto, preparar para order_items
-      if (dbProduct) {
-        if (!firstProductId) {
-          firstProductId = dbProduct.id;
-        }
-
-        itemsToInsert.push({
-          product_id: dbProduct.id,
-          unit_price: stripePrice?.unit_amount || 0,
-          quantity: li.quantity || 1,
-        });
-      } else {
-        console.error(`❌ No se pudo encontrar producto para:`, {
-          stripe_product_id: stripeProduct?.id,
-          product_name: productName,
-        });
       }
     }
 
-    // 4. Usar metadata si no encontramos productos
-    if (!firstProductId && session.metadata?.product_id) {
-      console.log(
-        "🔍 Usando product_id de metadata:",
-        session.metadata.product_id
-      );
-      firstProductId = session.metadata.product_id;
-    }
+    console.log("📋 Productos finales procesados:", allProductsInfo);
 
-    // 5. Crear orden
+    // 6. Crear orden con el primer producto (para compatibilidad)
+    const firstProductId =
+      allProductsInfo.length > 0 ? allProductsInfo[0].database_id : null;
+    const orderName =
+      allProductsInfo.map((p) => p.database_name).join(", ") ||
+      productsFromLineItems.map((p) => p.name).join(", ") ||
+      "Productos múltiples";
+
     const amount = (session.amount_total ?? 0) / 100;
     const orderData = {
       checkout_session_id: session.id,
@@ -172,8 +237,8 @@ export const POST: APIRoute = async ({ request }) => {
       customer_email: session.customer_details?.email || "unknown",
       amount_total: amount,
       status: "paid",
-      name: itemNames.join(", "),
-      product_id: firstProductId,
+      name: orderName,
+      product_id: firstProductId, // Solo el primer producto para compatibilidad
       created_at: new Date().toISOString(),
     };
 
@@ -192,32 +257,64 @@ export const POST: APIRoute = async ({ request }) => {
 
     console.log("✅ Orden creada exitosamente:", insertedOrder);
 
-    // 6. Insertar order_items si tenemos productos válidos
-    if (itemsToInsert.length > 0) {
-      const finalItemsToInsert = itemsToInsert.map((item) => ({
-        ...item,
+    // 7. Insertar TODOS los order_items
+    if (allProductsInfo.length > 0) {
+      const itemsToInsert = allProductsInfo.map((productInfo) => ({
         order_id: insertedOrder.id,
+        product_id: productInfo.database_id,
+        quantity: productInfo.quantity,
+        unit_price: productInfo.unit_amount,
       }));
 
-      console.log("📦 Insertando order_items:", finalItemsToInsert);
+      console.log("📦 Insertando order_items:", itemsToInsert);
 
       const { data: insertedItems, error: itemsErr } = await supabaseAdmin
         .from("order_items")
-        .insert(finalItemsToInsert)
+        .insert(itemsToInsert)
         .select();
 
       if (itemsErr) {
         console.error("❌ Error al insertar order_items:", itemsErr);
-      } else {
-        console.log(
-          `✅ ${finalItemsToInsert.length} order_items insertados:`,
-          insertedItems
-        );
+        return new Response("Error creating order items", { status: 500 });
       }
+
+      console.log(
+        `✅ ${itemsToInsert.length} order_items insertados exitosamente:`,
+        insertedItems
+      );
     } else {
       console.warn(
         "⚠️ No se insertaron order_items - no se encontraron productos válidos"
       );
+
+      // Crear order_items básicos desde los line items aunque no se encuentren en la DB
+      const fallbackItems = productsFromLineItems.map((lineProduct) => ({
+        order_id: insertedOrder.id,
+        product_id: null, // No hay producto en la DB
+        quantity: lineProduct.quantity,
+        unit_price: lineProduct.unit_amount,
+        // Podrías agregar una columna 'product_name' si quieres guardar el nombre
+      }));
+
+      if (fallbackItems.length > 0) {
+        console.log(
+          "📦 Insertando order_items de fallback (sin product_id):",
+          fallbackItems
+        );
+
+        const { error: fallbackErr } = await supabaseAdmin
+          .from("order_items")
+          .insert(fallbackItems);
+
+        if (fallbackErr) {
+          console.error(
+            "❌ Error al insertar order_items de fallback:",
+            fallbackErr
+          );
+        } else {
+          console.log("✅ Order_items de fallback insertados");
+        }
+      }
     }
   } else {
     console.log("ℹ️ Evento ignorado:", event.type);
