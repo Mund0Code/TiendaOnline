@@ -1,4 +1,4 @@
-// src/lib/cartStore.ts - Versión mejorada con loading y mejor UX
+// src/lib/cartStore.ts - Versión simplificada sin hooks problemáticos
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
@@ -28,10 +28,6 @@ interface CartState {
   isItemInCart: (id: string) => boolean;
   getItemQuantity: (id: string) => number;
   getItem: (id: string) => CartItem | undefined;
-
-  // Acciones de estado
-  setAddingToCart: (isAdding: boolean) => void;
-  setUpdatingCart: (isUpdating: boolean) => void;
 }
 
 export const useCartStore = create<CartState>()(
@@ -77,7 +73,7 @@ export const useCartStore = create<CartState>()(
           }
         } catch (error) {
           console.error("❌ Error agregando al carrito:", error);
-          throw error; // Re-lanzar para que el componente pueda manejarlo
+          throw error;
         } finally {
           set({ isAddingToCart: false });
         }
@@ -154,15 +150,6 @@ export const useCartStore = create<CartState>()(
       getItem: (id: string) => {
         return get().items.find((i) => i.id === id);
       },
-
-      // Acciones de estado
-      setAddingToCart: (isAdding: boolean) => {
-        set({ isAddingToCart: isAdding });
-      },
-
-      setUpdatingCart: (isUpdating: boolean) => {
-        set({ isUpdatingCart: isUpdating });
-      },
     }),
     {
       name: "myshop-cart",
@@ -173,46 +160,6 @@ export const useCartStore = create<CartState>()(
       }),
       // Versión para manejar migraciones futuras
       version: 1,
-      // Función de migración si cambias la estructura
-      migrate: (persistedState: any, version: number) => {
-        if (version === 0) {
-          // Migrar de versión antigua si es necesario
-          return {
-            items: persistedState.items || [],
-          };
-        }
-        return persistedState as CartState;
-      },
     }
   )
 );
-
-// Hooks personalizados para casos de uso específicos
-export const useCartItems = () => useCartStore((state) => state.items);
-export const useCartTotal = () => useCartStore((state) => state.total());
-export const useCartTotalItems = () =>
-  useCartStore((state) => state.totalItems());
-export const useCartLoading = () =>
-  useCartStore((state) => ({
-    isAddingToCart: state.isAddingToCart,
-    isUpdatingCart: state.isUpdatingCart,
-  }));
-
-// Selector para verificar si un producto específico está en el carrito
-export const useIsItemInCart = (id: string) =>
-  useCartStore((state) => state.isItemInCart(id));
-
-// Selector para obtener la cantidad de un producto específico
-export const useItemQuantity = (id: string) =>
-  useCartStore((state) => state.getItemQuantity(id));
-
-// Tipos de utilidad para componentes
-export type CartActions = Pick<
-  CartState,
-  "addItem" | "removeItem" | "updateQuantity" | "clearCart"
->;
-
-export type CartGetters = Pick<
-  CartState,
-  "total" | "totalItems" | "isItemInCart" | "getItemQuantity" | "getItem"
->;

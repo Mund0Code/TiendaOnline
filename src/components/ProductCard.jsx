@@ -1,20 +1,24 @@
-// src/components/ProductCard.jsx - Actualizado para usar el store de TypeScript
+// src/components/ProductCard.jsx - Versión corregida sin hooks problemáticos
 import React, { useState } from "react";
-import {
-  useCartStore,
-  useIsItemInCart,
-  useItemQuantity,
-  useCartLoading,
-} from "../lib/cartStore";
+import { useCartStore } from "../lib/cartStore";
 
 export default function ProductCard({ product }) {
-  const addItem = useCartStore((s) => s.addItem);
-  const { isAddingToCart } = useCartLoading();
-  const isInCart = useIsItemInCart(product.id);
-  const quantity = useItemQuantity(product.id);
+  // Usar solo el hook principal del store
+  const { items, addItem, isAddingToCart, isItemInCart, getItemQuantity } =
+    useCartStore((state) => ({
+      items: state.items,
+      addItem: state.addItem,
+      isAddingToCart: state.isAddingToCart,
+      isItemInCart: state.isItemInCart,
+      getItemQuantity: state.getItemQuantity,
+    }));
 
   const [justAdded, setJustAdded] = useState(false);
   const [error, setError] = useState(null);
+
+  // Calcular si está en carrito y cantidad
+  const isInCart = isItemInCart(product.id);
+  const quantity = getItemQuantity(product.id);
 
   const handleAdd = async () => {
     // Evitar doble click o si ya está en proceso
