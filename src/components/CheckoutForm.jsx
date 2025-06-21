@@ -20,6 +20,12 @@ export default function CheckoutForm() {
         if (data.session) {
           setUserId(data.session.user.id);
           setUser(data.session.user);
+          console.log("✅ Usuario autenticado:", {
+            id: data.session.user.id,
+            email: data.session.user.email,
+          });
+        } else {
+          console.log("❌ No hay sesión activa");
         }
       } catch (err) {
         console.error("Error getting session:", err);
@@ -32,42 +38,124 @@ export default function CheckoutForm() {
   }, []);
 
   const handleCheckout = async () => {
+    console.log("🚀 Iniciando proceso de checkout...");
+
     if (!userId) {
+      console.log("❌ Usuario no autenticado");
       setShowLoginModal(true);
       return;
     }
+
+    if (!items || items.length === 0) {
+      console.log("❌ Carrito vacío");
+      setError("El carrito está vacío");
+      return;
+    }
+
+    console.log("📦 Items en el carrito:", items);
 
     setLoading(true);
     setError(null);
 
     try {
+      // Validar datos antes de enviar
+      const validItems = items.filter((item) => {
+        const isValid = item.id && item.name && item.price && item.quantity;
+        if (!isValid) {
+          console.warn("⚠️ Item inválido encontrado:", item);
+        }
+        return isValid;
+      });
+
+      if (validItems.length === 0) {
+        throw new Error("No hay artículos válidos en el carrito");
+      }
+
+      if (validItems.length !== items.length) {
+        console.warn(
+          `⚠️ Se filtraron ${items.length - validItems.length} items inválidos`
+        );
+      }
+
+      const requestData = {
+        items: validItems.map((item) => ({
+          id: item.id,
+          name: item.name,
+          price: Number(item.price),
+          quantity: Number(item.quantity),
+        })),
+        customerId: userId,
+      };
+
+      console.log("📤 Enviando datos al servidor:", requestData);
+
       const res = await fetch("/api/create-checkout-session", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ items, customerId: userId }),
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(requestData),
+      });
+
+      console.log("📥 Respuesta del servidor:", {
+        status: res.status,
+        statusText: res.statusText,
+        ok: res.ok,
       });
 
       if (!res.ok) {
-        throw new Error(`Error ${res.status}: ${res.statusText}`);
+        // Intentar obtener el mensaje de error del servidor
+        let errorMessage = `Error ${res.status}: ${res.statusText}`;
+
+        try {
+          const errorData = await res.json();
+          if (errorData.error) {
+            errorMessage = errorData.error;
+          }
+          console.error("❌ Error del servidor:", errorData);
+        } catch (parseError) {
+          console.error(
+            "❌ No se pudo parsear la respuesta de error:",
+            parseError
+          );
+          // Intentar obtener como texto
+          try {
+            const errorText = await res.text();
+            console.error("❌ Error como texto:", errorText);
+            if (errorText) {
+              errorMessage = errorText;
+            }
+          } catch (textError) {
+            console.error(
+              "❌ No se pudo obtener el error como texto:",
+              textError
+            );
+          }
+        }
+
+        throw new Error(errorMessage);
       }
 
-      const { url, error: apiError } = await res.json();
+      const responseData = await res.json();
+      console.log("✅ Respuesta exitosa:", responseData);
+
+      const { url, error: apiError } = responseData;
 
       if (apiError) {
         throw new Error(apiError);
       }
 
       if (!url) {
-        throw new Error("No se recibió URL de pago");
+        throw new Error("No se recibió URL de pago del servidor");
       }
 
-      // Limpiar carrito antes de redirigir
+      console.log("🔄 Limpiando carrito...");
       clearCart();
 
-      // Redirigir a Stripe
+      console.log("🔗 Redirigiendo a Stripe:", url);
       window.location.href = url;
     } catch (err) {
-      console.error("Checkout error:", err);
+      console.error("❌ Error completo en checkout:", err);
       setError(err.message || "Error al procesar el pago. Inténtalo de nuevo.");
     } finally {
       setLoading(false);
@@ -148,7 +236,7 @@ export default function CheckoutForm() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
-      <div className="max-w-4xl==- mx-auto px-4 py-8">
+      <div className="max-w-4xl mx-auto px-4 py-8">
         {/* Header */}
         <div className="text-center mb-8 pt-8">
           <h1 className="text-4xl font-bold mb-2">
@@ -221,6 +309,9 @@ export default function CheckoutForm() {
                       <p className="text-sm text-gray-600">
                         €{item.price.toFixed(2)} × {item.quantity}
                       </p>
+                      <div className="text-xs text-gray-400 mt-1">
+                        ID: {item.id}
+                      </div>
                     </div>
 
                     <div className="text-right">
@@ -271,6 +362,9 @@ export default function CheckoutForm() {
                       Sesión iniciada como: {user.email}
                     </span>
                   </div>
+                  <div className="text-xs text-green-600 mt-1">
+                    ID: {userId}
+                  </div>
                 </div>
               </div>
             )}
@@ -307,9 +401,9 @@ export default function CheckoutForm() {
               {/* Mensaje de error */}
               {error && (
                 <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
-                  <div className="flex items-center">
+                  <div className="flex items-start">
                     <svg
-                      className="w-5 h-5 text-red-600 mr-2"
+                      className="w-5 h-5 text-red-600 mr-2 mt-0.5 flex-shrink-0"
                       fill="none"
                       stroke="currentColor"
                       viewBox="0 0 24 24"
@@ -321,7 +415,22 @@ export default function CheckoutForm() {
                         d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
                       />
                     </svg>
-                    <span className="text-red-800 text-sm">{error}</span>
+                    <div className="text-red-800 text-sm">
+                      <div className="font-medium mb-1">Error de pago</div>
+                      <div>{error}</div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Información de debug */}
+              {process.env.NODE_ENV === "development" && (
+                <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg text-xs">
+                  <div className="font-medium text-blue-800 mb-1">
+                    Debug Info:
+                  </div>
+                  <div className="text-blue-600">
+                    Items: {items.length} | User: {userId ? "Yes" : "No"}
                   </div>
                 </div>
               )}
