@@ -139,13 +139,9 @@ export default function Header() {
               <span className="sr-only">Light bulb</span>
             </span>
             <span>
-              New brand identity has been launched for the{" "}
-              <a
-                href="https://flowbite.com"
-                className="inline font-medium text-blue-600 underline dark:text-blue-500 hover:no-underline"
-              >
-                Flowbite Library
-              </a>
+              Si acabas de entrar, los pagos no están habilitados aún. Puedes
+              navegar por el sitio, pero no podrás realizar compras hasta que se
+              active la funcionalidad de pago.
             </span>
           </p>
         </div>
