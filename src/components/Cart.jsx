@@ -1,4 +1,4 @@
-// src/components/Cart.jsx
+// src/components/Cart.jsx - Actualizado para máximo 1 artículo
 import React, { useState } from "react";
 import { useCartStore } from "../lib/cartStore";
 
@@ -6,7 +6,6 @@ export default function Cart() {
   const [isUpdating, setIsUpdating] = useState({});
   const [showConfirmClear, setShowConfirmClear] = useState(false);
 
-  // Esta línea sólo corre en el cliente porque Astro hidra con client:load
   const items = useCartStore((s) => s.items);
   const removeItem = useCartStore((s) => s.removeItem);
   const updateQty = useCartStore((s) => s.updateQuantity);
@@ -15,18 +14,7 @@ export default function Cart() {
   const total = items.reduce((sum, i) => sum + i.price * i.quantity, 0);
   const totalItems = items.reduce((sum, i) => sum + i.quantity, 0);
 
-  const handleQuantityChange = async (itemId, newQuantity) => {
-    if (newQuantity < 1) return;
-
-    setIsUpdating((prev) => ({ ...prev, [itemId]: true }));
-
-    // Simular pequeña demora para UX
-    setTimeout(() => {
-      updateQty(itemId, newQuantity);
-      setIsUpdating((prev) => ({ ...prev, [itemId]: false }));
-    }, 200);
-  };
-
+  // Ya no necesitamos handleQuantityChange porque cada item es cantidad 1
   const handleRemoveItem = async (itemId) => {
     setIsUpdating((prev) => ({ ...prev, [itemId]: true }));
 
@@ -118,6 +106,9 @@ export default function Cart() {
             {totalItems} {totalItems === 1 ? "artículo" : "artículos"} en tu
             carrito
           </p>
+          <p className="text-sm text-gray-500 mt-1">
+            Máximo 1 unidad por producto
+          </p>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -168,70 +159,15 @@ export default function Cart() {
                       €{item.price.toFixed(2)}
                     </p>
 
-                    {/* Controles de cantidad y eliminación */}
+                    {/* Información de cantidad (fija en 1) */}
                     <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
                       <div className="flex items-center space-x-3">
                         <span className="text-sm text-gray-600 font-medium">
-                          Cantidad:
+                          Cantidad: 1 unidad
                         </span>
-                        <div className="flex items-center border border-gray-300 rounded-lg overflow-hidden">
-                          <button
-                            onClick={() =>
-                              handleQuantityChange(item.id, item.quantity - 1)
-                            }
-                            disabled={item.quantity <= 1 || isUpdating[item.id]}
-                            className="px-3 py-2 bg-gray-50 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                          >
-                            <svg
-                              className="w-4 h-4"
-                              fill="none"
-                              stroke="currentColor"
-                              viewBox="0 0 24 24"
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth="2"
-                                d="M20 12H4"
-                              />
-                            </svg>
-                          </button>
-                          <input
-                            type="number"
-                            min="1"
-                            max="99"
-                            value={item.quantity}
-                            onChange={(e) =>
-                              handleQuantityChange(
-                                item.id,
-                                Number(e.target.value)
-                              )
-                            }
-                            disabled={isUpdating[item.id]}
-                            className="w-16 px-3 py-2 text-center border-0 focus:ring-0 focus:outline-none"
-                          />
-                          <button
-                            onClick={() =>
-                              handleQuantityChange(item.id, item.quantity + 1)
-                            }
-                            disabled={isUpdating[item.id]}
-                            className="px-3 py-2 bg-gray-50 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                          >
-                            <svg
-                              className="w-4 h-4"
-                              fill="none"
-                              stroke="currentColor"
-                              viewBox="0 0 24 24"
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth="2"
-                                d="M12 6v6m0 0v6m0-6h6m-6 0H6"
-                              />
-                            </svg>
-                          </button>
-                        </div>
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                          Máximo permitido
+                        </span>
                       </div>
 
                       <button
@@ -256,12 +192,12 @@ export default function Cart() {
                       </button>
                     </div>
 
-                    {/* Subtotal */}
+                    {/* Subtotal (siempre será el precio base) */}
                     <div className="mt-3 pt-3 border-t border-gray-100">
                       <p className="text-sm text-gray-600">
                         Subtotal:{" "}
                         <span className="font-semibold text-gray-900">
-                          €{(item.price * item.quantity).toFixed(2)}
+                          €{item.price.toFixed(2)}
                         </span>
                       </p>
                     </div>
@@ -299,6 +235,28 @@ export default function Cart() {
                     <span>Total</span>
                     <span>€{total.toFixed(2)}</span>
                   </div>
+                </div>
+              </div>
+
+              {/* Info sobre límite */}
+              <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                <div className="flex items-center">
+                  <svg
+                    className="w-4 h-4 text-blue-600 mr-2"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2"
+                      d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                    />
+                  </svg>
+                  <span className="text-blue-800 text-sm">
+                    Límite: 1 unidad por producto
+                  </span>
                 </div>
               </div>
 
