@@ -54,13 +54,23 @@ export default function CheckoutForm() {
     setCouponError(null);
 
     try {
+      // Mapear códigos de cupón a IDs de Stripe
+      const couponMapping = {
+        BIENVENIDA25: "bienvenida25", // Código mostrado al usuario -> ID en Stripe
+        // Agrega más mapeos aquí si tienes más cupones
+      };
+
+      const stripeId =
+        couponMapping[couponCode.trim().toUpperCase()] ||
+        couponCode.trim().toLowerCase();
+
       const response = await fetch("/api/validate-coupon", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          couponCode: couponCode.trim().toUpperCase(),
+          couponCode: stripeId, // Enviar el ID de Stripe, no el código de display
         }),
       });
 
@@ -160,8 +170,8 @@ export default function CheckoutForm() {
         // Incluir información del cupón si está aplicado
         coupon: appliedCoupon
           ? {
-              id: appliedCoupon.id,
-              code: couponCode.trim().toUpperCase(),
+              id: appliedCoupon.id, // Este será 'bienvenida25'
+              code: "bienvenida25", // Usar el ID de Stripe, no el código de display
               percent_off: appliedCoupon.percent_off,
               amount_off: appliedCoupon.amount_off,
             }
