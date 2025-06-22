@@ -13,6 +13,12 @@ export default function CheckoutForm() {
   const [authLoading, setAuthLoading] = useState(true);
   const [showLoginModal, setShowLoginModal] = useState(false);
 
+  // Estados para cupones
+  const [couponCode, setCouponCode] = useState("");
+  const [appliedCoupon, setAppliedCoupon] = useState(null);
+  const [couponLoading, setCouponLoading] = useState(false);
+  const [couponError, setCouponError] = useState(null);
+
   useEffect(() => {
     const getSession = async () => {
       try {
@@ -36,6 +42,78 @@ export default function CheckoutForm() {
 
     getSession();
   }, []);
+
+  // Función para validar cupón
+  const validateCoupon = async () => {
+    if (!couponCode.trim()) {
+      setCouponError("Ingresa un código de cupón");
+      return;
+    }
+
+    setCouponLoading(true);
+    setCouponError(null);
+
+    try {
+      const response = await fetch("/api/validate-coupon", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          couponCode: couponCode.trim().toUpperCase(),
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Error validando cupón");
+      }
+
+      if (data.valid) {
+        setAppliedCoupon(data.coupon);
+        setCouponError(null);
+        console.log("✅ Cupón aplicado:", data.coupon);
+      } else {
+        throw new Error("Cupón inválido o expirado");
+      }
+    } catch (err) {
+      console.error("❌ Error validando cupón:", err);
+      setCouponError(err.message);
+      setAppliedCoupon(null);
+    } finally {
+      setCouponLoading(false);
+    }
+  };
+
+  // Función para remover cupón
+  const removeCoupon = () => {
+    setAppliedCoupon(null);
+    setCouponCode("");
+    setCouponError(null);
+  };
+
+  // Calcular descuento
+  const calculateDiscount = () => {
+    if (!appliedCoupon) return { discount: 0, newTotal: total };
+
+    const subtotal = total;
+    let discount = 0;
+
+    if (appliedCoupon.percent_off) {
+      // Descuento porcentual
+      discount = (subtotal * appliedCoupon.percent_off) / 100;
+    } else if (appliedCoupon.amount_off) {
+      // Descuento fijo (convertir de centavos a euros)
+      discount = appliedCoupon.amount_off / 100;
+    }
+
+    // Asegurar que el descuento no sea mayor que el total
+    discount = Math.min(discount, subtotal);
+    const newTotal = Math.max(0, subtotal - discount);
+
+    return { discount, newTotal };
+  };
 
   const handleCheckout = async () => {
     console.log("🚀 Iniciando proceso de checkout...");
@@ -71,12 +149,6 @@ export default function CheckoutForm() {
         throw new Error("No hay artículos válidos en el carrito");
       }
 
-      if (validItems.length !== items.length) {
-        console.warn(
-          `⚠️ Se filtraron ${items.length - validItems.length} items inválidos`
-        );
-      }
-
       const requestData = {
         items: validItems.map((item) => ({
           id: item.id,
@@ -85,6 +157,15 @@ export default function CheckoutForm() {
           quantity: Number(item.quantity),
         })),
         customerId: userId,
+        // Incluir información del cupón si está aplicado
+        coupon: appliedCoupon
+          ? {
+              id: appliedCoupon.id,
+              code: couponCode.trim().toUpperCase(),
+              percent_off: appliedCoupon.percent_off,
+              amount_off: appliedCoupon.amount_off,
+            }
+          : null,
       };
 
       console.log("📤 Enviando datos al servidor:", requestData);
@@ -104,7 +185,6 @@ export default function CheckoutForm() {
       });
 
       if (!res.ok) {
-        // Intentar obtener el mensaje de error del servidor
         let errorMessage = `Error ${res.status}: ${res.statusText}`;
 
         try {
@@ -118,19 +198,6 @@ export default function CheckoutForm() {
             "❌ No se pudo parsear la respuesta de error:",
             parseError
           );
-          // Intentar obtener como texto
-          try {
-            const errorText = await res.text();
-            console.error("❌ Error como texto:", errorText);
-            if (errorText) {
-              errorMessage = errorText;
-            }
-          } catch (textError) {
-            console.error(
-              "❌ No se pudo obtener el error como texto:",
-              textError
-            );
-          }
         }
 
         throw new Error(errorMessage);
@@ -164,6 +231,7 @@ export default function CheckoutForm() {
 
   const total = items.reduce((sum, i) => sum + i.price * i.quantity, 0);
   const totalItems = items.reduce((sum, i) => sum + i.quantity, 0);
+  const { discount, newTotal } = calculateDiscount();
 
   if (authLoading) {
     return (
@@ -309,9 +377,6 @@ export default function CheckoutForm() {
                       <p className="text-sm text-gray-600">
                         €{item.price.toFixed(2)} × {item.quantity}
                       </p>
-                      <div className="text-xs text-gray-400 mt-1">
-                        ID: {item.id}
-                      </div>
                     </div>
 
                     <div className="text-right">
@@ -322,6 +387,126 @@ export default function CheckoutForm() {
                   </div>
                 ))}
               </div>
+            </div>
+
+            {/* Sección de cupón */}
+            <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                <svg
+                  className="w-5 h-5 mr-2 text-purple-600"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="2"
+                    d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"
+                  />
+                </svg>
+                Código de descuento
+              </h3>
+
+              {!appliedCoupon ? (
+                <div className="space-y-3">
+                  <div className="flex space-x-2">
+                    <input
+                      type="text"
+                      value={couponCode}
+                      onChange={(e) =>
+                        setCouponCode(e.target.value.toUpperCase())
+                      }
+                      placeholder="Ingresa tu código"
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                      disabled={couponLoading}
+                      onKeyPress={(e) => e.key === "Enter" && validateCoupon()}
+                    />
+                    <button
+                      onClick={validateCoupon}
+                      disabled={couponLoading || !couponCode.trim()}
+                      className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+                    >
+                      {couponLoading ? (
+                        <svg
+                          className="animate-spin h-5 w-5"
+                          viewBox="0 0 24 24"
+                        >
+                          <circle
+                            className="opacity-25"
+                            cx="12"
+                            cy="12"
+                            r="10"
+                            stroke="currentColor"
+                            strokeWidth="4"
+                          ></circle>
+                          <path
+                            className="opacity-75"
+                            fill="currentColor"
+                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                          ></path>
+                        </svg>
+                      ) : (
+                        "Aplicar"
+                      )}
+                    </button>
+                  </div>
+
+                  {couponError && (
+                    <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+                      <p className="text-sm text-red-600 flex items-center">
+                        <svg
+                          className="w-4 h-4 mr-2"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth="2"
+                            d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                          ></path>
+                        </svg>
+                        {couponError}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="font-medium text-green-800">
+                        Cupón aplicado: {couponCode}
+                      </p>
+                      <p className="text-sm text-green-600">
+                        {appliedCoupon.percent_off
+                          ? `${appliedCoupon.percent_off}% de descuento`
+                          : `€${(appliedCoupon.amount_off / 100).toFixed(2)} de descuento`}
+                      </p>
+                    </div>
+                    <button
+                      onClick={removeCoupon}
+                      className="text-green-600 hover:text-green-700 p-1"
+                    >
+                      <svg
+                        className="w-5 h-5"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth="2"
+                          d="M6 18L18 6M6 6l12 12"
+                        ></path>
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Información del usuario */}
@@ -362,9 +547,6 @@ export default function CheckoutForm() {
                       Sesión iniciada como: {user.email}
                     </span>
                   </div>
-                  <div className="text-xs text-green-600 mt-1">
-                    ID: {userId}
-                  </div>
                 </div>
               </div>
             )}
@@ -382,6 +564,29 @@ export default function CheckoutForm() {
                   <span>Subtotal ({totalItems} artículos)</span>
                   <span>€{total.toFixed(2)}</span>
                 </div>
+
+                {appliedCoupon && discount > 0 && (
+                  <div className="flex justify-between text-green-600">
+                    <span className="flex items-center">
+                      <svg
+                        className="w-4 h-4 mr-1"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth="2"
+                          d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"
+                        ></path>
+                      </svg>
+                      Descuento ({couponCode})
+                    </span>
+                    <span>-€{discount.toFixed(2)}</span>
+                  </div>
+                )}
+
                 <div className="flex justify-between text-gray-600">
                   <span>Envío</span>
                   <span className="text-green-600 font-medium">Gratis</span>
@@ -393,8 +598,18 @@ export default function CheckoutForm() {
                 <div className="border-t border-gray-200 pt-3">
                   <div className="flex justify-between text-xl font-bold text-gray-900">
                     <span>Total</span>
-                    <span>€{total.toFixed(2)}</span>
+                    <span className={discount > 0 ? "text-green-600" : ""}>
+                      €{newTotal.toFixed(2)}
+                    </span>
                   </div>
+                  {discount > 0 && (
+                    <div className="text-sm text-gray-500 text-right">
+                      <span className="line-through">€{total.toFixed(2)}</span>
+                      <span className="ml-2 text-green-600 font-medium">
+                        Ahorras €{discount.toFixed(2)}
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -419,18 +634,6 @@ export default function CheckoutForm() {
                       <div className="font-medium mb-1">Error de pago</div>
                       <div>{error}</div>
                     </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Información de debug */}
-              {process.env.NODE_ENV === "development" && (
-                <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg text-xs">
-                  <div className="font-medium text-blue-800 mb-1">
-                    Debug Info:
-                  </div>
-                  <div className="text-blue-600">
-                    Items: {items.length} | User: {userId ? "Yes" : "No"}
                   </div>
                 </div>
               )}
@@ -465,7 +668,9 @@ export default function CheckoutForm() {
                         d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"
                       />
                     </svg>
-                    Pagar con Stripe
+                    {appliedCoupon
+                      ? `Pagar €${newTotal.toFixed(2)} con Stripe`
+                      : "Pagar con Stripe"}
                   </>
                 )}
               </button>

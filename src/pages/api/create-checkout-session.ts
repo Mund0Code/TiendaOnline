@@ -20,7 +20,7 @@ export const POST: APIRoute = async ({ request }) => {
       });
     }
 
-    const { items, customerId } = parsedData;
+    const { items, customerId, coupon } = parsedData; // Agregar coupon a la desestructuración
 
     // 2. Validar datos básicos
     console.log("🔍 Validando datos:", {
@@ -28,6 +28,8 @@ export const POST: APIRoute = async ({ request }) => {
       customerId,
       itemsType: typeof items,
       customerIdType: typeof customerId,
+      hasCoupon: !!coupon,
+      couponCode: coupon?.code,
     });
 
     if (!items) {
@@ -127,7 +129,56 @@ export const POST: APIRoute = async ({ request }) => {
       );
     }
 
-    // 6. Verificar conexión a Supabase
+    // 6. Validar cupón si se proporciona
+    let validatedCoupon = null;
+    if (coupon && coupon.code) {
+      console.log("🎫 Validando cupón:", coupon.code);
+
+      try {
+        const stripeCoupon = await stripe.coupons.retrieve(coupon.code);
+
+        // Validaciones adicionales del cupón
+        if (!stripeCoupon.valid) {
+          return new Response(
+            JSON.stringify({ error: "El cupón no está disponible" }),
+            { status: 400, headers: { "Content-Type": "application/json" } }
+          );
+        }
+
+        if (
+          stripeCoupon.redeem_by &&
+          stripeCoupon.redeem_by < Math.floor(Date.now() / 1000)
+        ) {
+          return new Response(
+            JSON.stringify({ error: "El cupón ha expirado" }),
+            { status: 400, headers: { "Content-Type": "application/json" } }
+          );
+        }
+
+        if (
+          stripeCoupon.max_redemptions &&
+          stripeCoupon.times_redeemed >= stripeCoupon.max_redemptions
+        ) {
+          return new Response(
+            JSON.stringify({
+              error: "El cupón ha alcanzado su límite de usos",
+            }),
+            { status: 400, headers: { "Content-Type": "application/json" } }
+          );
+        }
+
+        validatedCoupon = stripeCoupon;
+        console.log("✅ Cupón validado:", stripeCoupon.id);
+      } catch (couponError: any) {
+        console.error("❌ Error validando cupón:", couponError);
+        return new Response(
+          JSON.stringify({ error: "Código de cupón inválido" }),
+          { status: 400, headers: { "Content-Type": "application/json" } }
+        );
+      }
+    }
+
+    // 7. Verificar conexión a Supabase
     console.log("🔄 Verificando Supabase...");
 
     let supabaseAdmin;
@@ -171,7 +222,7 @@ export const POST: APIRoute = async ({ request }) => {
       );
     }
 
-    // 7. Crear line_items básicos (sin verificar productos por ahora)
+    // 8. Crear line_items
     console.log("🔄 Creando line_items...");
 
     const line_items = items.map((item) => ({
@@ -190,24 +241,54 @@ export const POST: APIRoute = async ({ request }) => {
 
     console.log("📦 Line items creados:", line_items.length);
 
-    // 8. Crear sesión de Stripe
+    // 9. Preparar configuración de la sesión
+    const sessionConfig: any = {
+      payment_method_types: ["card"],
+      line_items,
+      mode: "payment",
+      client_reference_id: customerId,
+      metadata: {
+        product_id: items[0].id,
+        customer_id: customerId,
+      },
+      success_url: `${import.meta.env.PUBLIC_SITE_URL || "http://localhost:4321"}/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${import.meta.env.PUBLIC_SITE_URL || "http://localhost:4321"}/cart`,
+    };
+
+    // 10. Agregar cupón si está validado
+    if (validatedCoupon) {
+      console.log("🎫 Aplicando cupón a la sesión:", validatedCoupon.id);
+      sessionConfig.discounts = [
+        {
+          coupon: validatedCoupon.id,
+        },
+      ];
+
+      // Agregar información del cupón a los metadatos
+      sessionConfig.metadata.coupon_code = coupon.code;
+      sessionConfig.metadata.coupon_id = validatedCoupon.id;
+
+      if (validatedCoupon.percent_off) {
+        sessionConfig.metadata.coupon_type = "percent";
+        sessionConfig.metadata.coupon_value =
+          validatedCoupon.percent_off.toString();
+      } else if (validatedCoupon.amount_off) {
+        sessionConfig.metadata.coupon_type = "amount";
+        sessionConfig.metadata.coupon_value =
+          validatedCoupon.amount_off.toString();
+      }
+    }
+
+    // 11. Crear sesión de Stripe
     console.log("🔄 Creando sesión de Stripe...");
 
     try {
-      const session = await stripe.checkout.sessions.create({
-        payment_method_types: ["card"],
-        line_items,
-        mode: "payment",
-        client_reference_id: customerId,
-        metadata: {
-          product_id: items[0].id,
-          customer_id: customerId,
-        },
-        success_url: `${import.meta.env.PUBLIC_SITE_URL || "http://localhost:4321"}/success?session_id={CHECKOUT_SESSION_ID}`,
-        cancel_url: `${import.meta.env.PUBLIC_SITE_URL || "http://localhost:4321"}/cart`,
-      });
+      const session = await stripe.checkout.sessions.create(sessionConfig);
 
       console.log("✅ Sesión de Stripe creada:", session.id);
+      if (validatedCoupon) {
+        console.log("🎫 Sesión creada con cupón aplicado");
+      }
 
       return new Response(
         JSON.stringify({

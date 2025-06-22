@@ -119,6 +119,8 @@ export default function Header() {
         </div>
       </div>
 
+      {/* Sticky Banner */}
+
       <div
         id="sticky-banner"
         tabindex="-1"
