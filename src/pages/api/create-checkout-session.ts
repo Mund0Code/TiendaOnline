@@ -130,47 +130,89 @@ export const POST: APIRoute = async ({ request }) => {
     }
 
     // 6. Validar cupón si se proporciona
+    function normalizeCouponCode(code: string): string[] {
+      const clean = code.trim();
+
+      const variations = [
+        clean.toLowerCase(),
+        clean.toUpperCase(),
+        clean.charAt(0).toUpperCase() + clean.slice(1).toLowerCase(),
+        clean.replace(/[^a-zA-Z0-9]/g, "").toLowerCase(),
+        clean.replace(/[^a-zA-Z0-9]/g, "").toUpperCase(),
+        clean
+          .replace(/[^a-zA-Z0-9]/g, "")
+          .charAt(0)
+          .toUpperCase() +
+          clean
+            .replace(/[^a-zA-Z0-9]/g, "")
+            .slice(1)
+            .toLowerCase(),
+      ];
+
+      return [...new Set(variations)];
+    }
+
+    // 6. Validar cupón si se proporciona (reemplazar la sección existente)
     let validatedCoupon = null;
     if (coupon && coupon.code) {
       console.log("🎫 Validando cupón:", coupon.code);
 
-      try {
-        const stripeCoupon = await stripe.coupons.retrieve(coupon.code);
+      // Generar variaciones del código
+      const codeVariations = normalizeCouponCode(coupon.code);
+      console.log("🔍 Intentando variaciones en checkout:", codeVariations);
 
-        // Validaciones adicionales del cupón
-        if (!stripeCoupon.valid) {
-          return new Response(
-            JSON.stringify({ error: "El cupón no está disponible" }),
-            { status: 400, headers: { "Content-Type": "application/json" } }
+      let couponFound = false;
+
+      for (const codeVariation of codeVariations) {
+        try {
+          console.log("🔄 Probando variación en checkout:", codeVariation);
+          const stripeCoupon = await stripe.coupons.retrieve(codeVariation);
+
+          // Validaciones adicionales del cupón
+          if (!stripeCoupon.valid) {
+            return new Response(
+              JSON.stringify({ error: "El cupón no está disponible" }),
+              { status: 400, headers: { "Content-Type": "application/json" } }
+            );
+          }
+
+          if (
+            stripeCoupon.redeem_by &&
+            stripeCoupon.redeem_by < Math.floor(Date.now() / 1000)
+          ) {
+            return new Response(
+              JSON.stringify({ error: "El cupón ha expirado" }),
+              { status: 400, headers: { "Content-Type": "application/json" } }
+            );
+          }
+
+          if (
+            stripeCoupon.max_redemptions &&
+            stripeCoupon.times_redeemed >= stripeCoupon.max_redemptions
+          ) {
+            return new Response(
+              JSON.stringify({
+                error: "El cupón ha alcanzado su límite de usos",
+              }),
+              { status: 400, headers: { "Content-Type": "application/json" } }
+            );
+          }
+
+          validatedCoupon = stripeCoupon;
+          couponFound = true;
+          console.log("✅ Cupón validado en checkout:", stripeCoupon.id);
+          break; // Salir del loop cuando encontremos el cupón
+        } catch (couponError: any) {
+          console.log(
+            `❌ Variación ${codeVariation} no encontrada en checkout, probando siguiente...`
           );
+          continue; // Probar la siguiente variación
         }
+      }
 
-        if (
-          stripeCoupon.redeem_by &&
-          stripeCoupon.redeem_by < Math.floor(Date.now() / 1000)
-        ) {
-          return new Response(
-            JSON.stringify({ error: "El cupón ha expirado" }),
-            { status: 400, headers: { "Content-Type": "application/json" } }
-          );
-        }
-
-        if (
-          stripeCoupon.max_redemptions &&
-          stripeCoupon.times_redeemed >= stripeCoupon.max_redemptions
-        ) {
-          return new Response(
-            JSON.stringify({
-              error: "El cupón ha alcanzado su límite de usos",
-            }),
-            { status: 400, headers: { "Content-Type": "application/json" } }
-          );
-        }
-
-        validatedCoupon = stripeCoupon;
-        console.log("✅ Cupón validado:", stripeCoupon.id);
-      } catch (couponError: any) {
-        console.error("❌ Error validando cupón:", couponError);
+      // Si no se encontró ninguna variación
+      if (!couponFound) {
+        console.error("❌ Ninguna variación del cupón encontrada en checkout");
         return new Response(
           JSON.stringify({ error: "Código de cupón inválido" }),
           { status: 400, headers: { "Content-Type": "application/json" } }
