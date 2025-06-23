@@ -119,7 +119,7 @@ export default function Header() {
         </div>
       </div>
 
-      {/* Sticky Banner */}
+      {/* 
 
       <div
         id="sticky-banner"
@@ -172,6 +172,8 @@ export default function Header() {
           </button>
         </div>
       </div>
+
+      */}
     </nav>
   );
 }
