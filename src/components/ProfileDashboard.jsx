@@ -247,7 +247,7 @@ export default function ProfileDashboard() {
           ${drawerOpen ? "translate-x-0" : "-translate-x-full"} sm:translate-x-0
         `}
         >
-          <div className="h-full flex flex-col">
+          <div className="h-full flex flex-col sm:overflow-auto">
             {/* Header del sidebar */}
             <div className="p-6 border-b border-gray-200 bg-gradient-to-r from-blue-600 to-purple-600 text-white">
               <div className="flex items-center space-x-3">
