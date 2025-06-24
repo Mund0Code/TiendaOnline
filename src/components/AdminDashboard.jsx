@@ -127,7 +127,7 @@ export default function AdminDashboard() {
         ${sidebarOpen ? "translate-x-0" : "-translate-x-full"} lg:translate-x-0
       `}
       >
-        <div className="h-full bg-white/80 backdrop-blur-xl border-r border-gray-200/50 shadow-2xl">
+        <div className="h-full bg-white/80 backdrop-blur-xl border-r border-gray-200/50 shadow-2xl sm:overflow-auto">
           {/* Header del sidebar */}
           <div className="p-6 border-b border-gray-200/50">
             <div className="flex items-center space-x-3">
