@@ -19,6 +19,7 @@ export default function AdminProducts() {
   const [loadingProducts, setLoadingProducts] = useState(false);
   const [uploadingFile, setUploadingFile] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
 
   useEffect(() => {
     fetchCategories();
@@ -61,7 +62,6 @@ export default function AdminProducts() {
 
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value });
-    // Limpiar error cuando el usuario empiece a escribir
     if (error) setError(null);
   };
 
@@ -126,9 +126,7 @@ export default function AdminProducts() {
     }
 
     if (!form.stripe_product_id) {
-      setError(
-        "El ID de producto de Stripe no debe ser modificado manualmente."
-      );
+      setError("El ID de producto de Stripe es obligatorio.");
       setSubmitting(false);
       return;
     }
@@ -155,7 +153,6 @@ export default function AdminProducts() {
       } else {
         setShowModal(false);
         await fetchProducts();
-        // Limpiar el formulario después de guardar exitosamente
         setForm({
           name: "",
           description: "",
@@ -177,10 +174,23 @@ export default function AdminProducts() {
     if (!confirm("¿Eliminar este producto?")) return;
 
     try {
+      // Primero obtener el producto para eliminar el archivo de storage
+      const { data: product } = await supabase
+        .from("products")
+        .select("file_path")
+        .eq("id", id)
+        .single();
+
+      // Eliminar el producto de la base de datos
       const { error } = await supabase.from("products").delete().eq("id", id);
+
       if (error) {
         setError(error.message);
       } else {
+        // Si el producto se eliminó exitosamente, intentar eliminar el archivo
+        if (product?.file_path) {
+          await supabase.storage.from("books").remove([product.file_path]);
+        }
         await fetchProducts();
       }
     } catch (err) {
@@ -188,6 +198,7 @@ export default function AdminProducts() {
     }
   };
 
+  // ✨ NUEVA FUNCIÓN: Subida directa a Supabase Storage
   const uploadFile = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -198,8 +209,8 @@ export default function AdminProducts() {
       return;
     }
 
-    // Validar tamaño (ejemplo: max 10MB)
-    const maxSize = 40 * 1024 * 1024; // 10MB
+    // Validar tamaño (40MB)
+    const maxSize = 40 * 1024 * 1024;
     if (file.size > maxSize) {
       setError("El archivo es demasiado grande. Máximo 40MB.");
       return;
@@ -207,89 +218,76 @@ export default function AdminProducts() {
 
     setError(null);
     setUploadingFile(true);
+    setUploadProgress(0);
 
     try {
-      const fd = new FormData();
-      fd.append("file", file);
+      // Generar nombre único para el archivo
+      const timestamp = Date.now();
+      const randomStr = Math.random().toString(36).substring(2, 15);
+      const fileExtension = file.name.split(".").pop();
+      const fileName = `${timestamp}-${randomStr}.${fileExtension}`;
 
-      console.log("Subiendo archivo:", {
-        name: file.name,
+      console.log("Subiendo archivo directamente a Supabase:", {
+        originalName: file.name,
+        fileName: fileName,
         size: file.size,
         type: file.type,
       });
 
-      const res = await fetch("/api/upload", {
-        method: "POST",
-        body: fd,
-      });
-
-      console.log("Respuesta del servidor:", res.status, res.statusText);
-
-      // Obtener la respuesta como texto primero para debugging
-      const responseText = await res.text();
-      console.log("Respuesta raw:", responseText);
-
-      if (!res.ok) {
-        let errorMessage = `Error HTTP ${res.status}: ${res.statusText}`;
-
-        // Intentar parsear el error si es JSON
-        try {
-          const errorData = JSON.parse(responseText);
-          if (errorData.error) {
-            errorMessage = errorData.error;
-          } else if (errorData.message) {
-            errorMessage = errorData.message;
+      // Simular progreso (Supabase no ofrece progreso real en el navegador)
+      const progressInterval = setInterval(() => {
+        setUploadProgress((prev) => {
+          if (prev >= 90) {
+            clearInterval(progressInterval);
+            return 90;
           }
-        } catch (parseError) {
-          // Si no es JSON válido, usar el texto completo
-          if (responseText) {
-            errorMessage = responseText;
-          }
-        }
-
-        throw new Error(errorMessage);
-      }
-
-      // Intentar parsear como JSON
-      let data;
-      try {
-        data = JSON.parse(responseText);
-      } catch (parseError) {
-        throw new Error(
-          "Respuesta del servidor no es JSON válido: " + responseText
-        );
-      }
-
-      console.log("Datos recibidos:", data);
-
-      if (data.error) {
-        setError("Error subiendo archivo: " + data.error);
-      } else if (data.path) {
-        // Usar el path para la base de datos (es lo que espera Supabase)
-        setForm((f) => ({ ...f, file_path: data.path }));
-        console.log("Archivo subido exitosamente:", {
-          path: data.path,
-          publicUrl: data.publicUrl,
-          fileName: data.fileName,
+          return prev + Math.random() * 10;
         });
-      } else {
-        setError(
-          "Respuesta inesperada del servidor. Datos recibidos: " +
-            JSON.stringify(data)
-        );
+      }, 200);
+
+      // Subir directamente a Supabase Storage
+      const { data, error } = await supabase.storage
+        .from("books")
+        .upload(fileName, file, {
+          cacheControl: "3600",
+          upsert: false,
+        });
+
+      clearInterval(progressInterval);
+      setUploadProgress(100);
+
+      if (error) {
+        throw new Error(`Error de Supabase Storage: ${error.message}`);
       }
+
+      console.log("Archivo subido exitosamente:", data);
+
+      // Obtener la URL pública del archivo (opcional, para mostrar enlace)
+      const { data: publicData } = supabase.storage
+        .from("books")
+        .getPublicUrl(fileName);
+
+      // Actualizar el formulario con el path del archivo
+      setForm((f) => ({ ...f, file_path: data.path }));
+
+      console.log("Upload completo:", {
+        path: data.path,
+        publicUrl: publicData?.publicUrl,
+      });
     } catch (err) {
       console.error("Error completo en uploadFile:", err);
       setError("Error subiendo archivo: " + err.message);
+      setUploadProgress(0);
     } finally {
       setUploadingFile(false);
+      // Resetear progreso después de un momento
+      setTimeout(() => setUploadProgress(0), 2000);
     }
   };
 
   const closeModal = () => {
     setShowModal(false);
     setError(null);
-    // No limpiar el form aquí para que el usuario no pierda los datos si cierra por accidente
   };
 
   return (
@@ -487,8 +485,8 @@ export default function AdminProducts() {
                   {/* Id de stripe */}
                   <div className="space-y-2">
                     <label className="text-sm font-semibold text-gray-700 flex items-center">
-                      <span className="mr-2">💰</span>
-                      Id de Stripe *
+                      <span className="mr-2">💳</span>
+                      ID de producto Stripe *
                     </label>
                     <input
                       name="stripe_product_id"
@@ -506,7 +504,7 @@ export default function AdminProducts() {
                   <div className="space-y-2">
                     <label className="text-sm font-semibold text-gray-700 flex items-center">
                       <span className="mr-2">🖼️</span>
-                      URL de la imagen de portada
+                      URL de imagen de portada
                     </label>
                     <input
                       name="image_url"
@@ -520,7 +518,7 @@ export default function AdminProducts() {
                   </div>
                 </div>
 
-                {/* Subida de archivo */}
+                {/* ✨ MEJORADA: Subida de archivo con progreso */}
                 <div className="space-y-2">
                   <label className="text-sm font-semibold text-gray-700 flex items-center">
                     <span className="mr-2">📄</span>
@@ -551,6 +549,17 @@ export default function AdminProducts() {
                           <span className="text-sm text-blue-600 font-medium">
                             Subiendo archivo...
                           </span>
+                          {uploadProgress > 0 && (
+                            <div className="w-full max-w-xs bg-gray-200 rounded-full h-2">
+                              <div
+                                className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                                style={{ width: `${uploadProgress}%` }}
+                              ></div>
+                            </div>
+                          )}
+                          <span className="text-xs text-gray-500">
+                            {Math.round(uploadProgress)}%
+                          </span>
                         </>
                       ) : (
                         <>
@@ -569,6 +578,9 @@ export default function AdminProducts() {
                           </svg>
                           <span className="text-sm text-gray-600">
                             Haz clic para subir un archivo PDF (máx. 40MB)
+                          </span>
+                          <span className="text-xs text-gray-500">
+                            ✨ Subida directa y rápida a Supabase Storage
                           </span>
                         </>
                       )}
@@ -589,7 +601,7 @@ export default function AdminProducts() {
                               d="M5 13l4 4L19 7"
                             />
                           </svg>
-                          Archivo subido: {form.file_path.split("/").pop()}
+                          ✅ Archivo subido: {form.file_path.split("/").pop()}
                         </p>
                       </div>
                     )}
