@@ -568,7 +568,7 @@ export default function AdminProducts() {
                             />
                           </svg>
                           <span className="text-sm text-gray-600">
-                            Haz clic para subir un archivo PDF (máx. 10MB)
+                            Haz clic para subir un archivo PDF (máx. 30MB)
                           </span>
                         </>
                       )}
