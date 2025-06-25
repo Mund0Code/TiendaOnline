@@ -199,9 +199,9 @@ export default function AdminProducts() {
     }
 
     // Validar tamaño (ejemplo: max 10MB)
-    const maxSize = 30 * 1024 * 1024; // 10MB
+    const maxSize = 40 * 1024 * 1024; // 10MB
     if (file.size > maxSize) {
-      setError("El archivo es demasiado grande. Máximo 30MB.");
+      setError("El archivo es demasiado grande. Máximo 40MB.");
       return;
     }
 
@@ -568,7 +568,7 @@ export default function AdminProducts() {
                             />
                           </svg>
                           <span className="text-sm text-gray-600">
-                            Haz clic para subir un archivo PDF (máx. 30MB)
+                            Haz clic para subir un archivo PDF (máx. 40MB)
                           </span>
                         </>
                       )}

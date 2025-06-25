@@ -34,11 +34,11 @@ export const POST: APIRoute = async ({ request }) => {
     }
 
     // Validar tamaño (máx 10MB)
-    const maxSize = 30 * 1024 * 1024; // 10MB
+    const maxSize = 40 * 1024 * 1024; // 10MB
     if (file.size > maxSize) {
       return new Response(
         JSON.stringify({
-          error: "El archivo es demasiado grande. Máximo 30MB.",
+          error: "El archivo es demasiado grande. Máximo 40MB.",
         }),
         {
           status: 400,
