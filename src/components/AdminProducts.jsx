@@ -199,9 +199,9 @@ export default function AdminProducts() {
     }
 
     // Validar tamaño (ejemplo: max 10MB)
-    const maxSize = 10 * 1024 * 1024; // 10MB
+    const maxSize = 30 * 1024 * 1024; // 10MB
     if (file.size > maxSize) {
-      setError("El archivo es demasiado grande. Máximo 10MB.");
+      setError("El archivo es demasiado grande. Máximo 30MB.");
       return;
     }
 
